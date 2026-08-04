@@ -1,0 +1,1477 @@
+import { useState, useEffect } from "react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Cell,
+  XAxis,
+} from "recharts";
+import {
+  Activity,
+  Heart,
+  Brain,
+  Shield,
+  ArrowRight,
+  ChevronRight,
+  Check,
+  Zap,
+  TrendingUp,
+  Users,
+  BarChart2,
+  Clock,
+  Target,
+  Droplets,
+  Dumbbell,
+  Apple,
+  Wind,
+  ChevronDown,
+  Info,
+} from "lucide-react";
+
+type Screen =
+  | "landing"
+  | "profile"
+  | "analysing"
+  | "insights"
+  | "action-plan";
+
+// ── Logo ─────────────────────────────────────────────────────────────
+function LangkahSihatLogo({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
+      <circle cx="24" cy="24" r="24" fill="#00d4aa" fillOpacity="0.15" />
+      <path
+        d="M14 28 C14 28 18 20 24 20 C30 20 34 28 34 28"
+        stroke="#00d4aa"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <circle cx="24" cy="17" r="4" fill="#00d4aa" />
+      <path
+        d="M20 32 L22 29 L24 32 L26 27 L28 32"
+        stroke="#00d4aa"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+// ── Shared Nav ────────────────────────────────────────────────────────
+function Nav({
+  onNavigate,
+  current,
+}: {
+  onNavigate: (s: Screen) => void;
+  current: Screen;
+}) {
+  return (
+    <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 border-b border-border bg-background/80 backdrop-blur-md">
+      <button
+        onClick={() => onNavigate("landing")}
+        className="flex items-center gap-2.5 cursor-pointer"
+      >
+        <LangkahSihatLogo size={36} />
+        <div>
+          <div
+            className="text-sm font-bold text-foreground"
+            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+          >
+            SihatQ
+          </div>
+          <div
+            className="text-[10px] text-muted-foreground"
+            style={{ fontFamily: "'DM Mono', monospace" }}
+          >
+            LANGKAH SIHAT
+          </div>
+        </div>
+      </button>
+      <div className="hidden md:flex items-center gap-1">
+        {(
+          [
+            ["landing", "Home"],
+            ["profile", "Profile"],
+            ["insights", "Insights"],
+            ["action-plan", "Action Plan"],
+          ] as [Screen, string][]
+        ).map(([screen, label]) => (
+          <button
+            key={screen}
+            onClick={() => onNavigate(screen)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              current === screen
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            style={{ fontFamily: "'Inter', sans-serif" }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <button
+        onClick={() => onNavigate("profile")}
+        className="px-5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+      >
+        Get Started
+      </button>
+    </nav>
+  );
+}
+
+// ── Landing Page ──────────────────────────────────────────────────────
+function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+  const features = [
+    {
+      icon: Users,
+      title: "Create your profile",
+      desc: "Tell us your age group, ethnicity, state, and lifestyle habits in two quick steps.",
+    },
+    {
+      icon: BarChart2,
+      title: "Explore population-level health insights",
+      desc: "See the leading causes of death for your demographic group, drawn from official DOSM data.",
+    },
+    {
+      icon: Target,
+      title: "Receive practical recommendations",
+      desc: "Get straightforward, evidence-based actions you can start this week — no diagnosis, no alarm.",
+    },
+  ];
+
+  const causePreview = [
+    { name: "Ischaemic heart diseases", pct: 25, color: "#ef4444" },
+    { name: "Pneumonia", pct: 16, color: "#f59e0b" },
+    { name: "Diabetes mellitus", pct: 14, color: "#f59e0b" },
+    { name: "Kidney failure", pct: 12, color: "#3b82f6" },
+    { name: "Transport accidents", pct: 8, color: "#6b8099" },
+  ];
+
+  return (
+    <div
+      className="min-h-screen bg-background text-foreground"
+      style={{ fontFamily: "'Inter', sans-serif" }}
+    >
+      {/* Hero */}
+      <section className="relative pt-32 pb-24 px-6 overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full bg-primary/5 blur-3xl" />
+        </div>
+        <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center relative">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5 mb-6">
+              <Shield size={12} className="text-primary" />
+              <span
+                className="text-xs text-primary font-medium"
+                style={{ fontFamily: "'DM Mono', monospace" }}
+              >
+                PREVENTIVE HEALTH · MALAYSIA
+              </span>
+            </div>
+            <h1
+              className="text-5xl md:text-6xl font-extrabold leading-tight mb-6 text-foreground"
+              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+            >
+              Understand your health context.{" "}
+              <span className="text-primary">Take proactive steps.</span>
+            </h1>
+            <p className="text-lg text-muted-foreground leading-relaxed mb-8 max-w-md">
+              Explore Malaysian mortality statistics based on your demographic profile and receive practical health actions — no diagnosis, no scaremongering.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => onNavigate("profile")}
+                className="flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all hover:scale-105"
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                Create my profile <ArrowRight size={16} />
+              </button>
+              <button
+                onClick={() => onNavigate("insights")}
+                className="flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
+              >
+                How it works
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-6 max-w-sm leading-relaxed">
+              This tool provides population-level information and does not diagnose or predict individual health outcomes.
+            </p>
+          </div>
+
+          {/* Sample insights preview card */}
+          <div className="bg-card border border-border rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <div
+                  className="text-xs text-primary mb-1"
+                  style={{ fontFamily: "'DM Mono', monospace" }}
+                >
+                  SAMPLE · ADULTS AGED 45–49 · SELANGOR
+                </div>
+                <div
+                  className="text-base font-semibold text-foreground"
+                  style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                >
+                  Selected causes of death
+                </div>
+              </div>
+              <span className="text-xs px-2 py-1 rounded-lg bg-secondary border border-border text-muted-foreground">
+                Example data
+              </span>
+            </div>
+            <div className="space-y-3 mb-5">
+              {causePreview.map((c, i) => (
+                <div key={c.name} className="flex items-center gap-3">
+                  <span
+                    className="text-xs w-4 shrink-0 text-right"
+                    style={{ color: c.color, fontFamily: "'DM Mono', monospace" }}
+                  >
+                    {i + 1}
+                  </span>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-foreground">{c.name}</span>
+                      <span
+                        className="text-xs font-semibold"
+                        style={{ color: c.color, fontFamily: "'DM Mono', monospace" }}
+                      >
+                        {c.pct}%
+                      </span>
+                    </div>
+                    <div className="h-1 bg-secondary rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${(c.pct / 25) * 100}%`, background: c.color, opacity: 0.7 }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="pt-4 border-t border-border flex items-center justify-between">
+              <div>
+                <div
+                  className="text-xs text-muted-foreground mb-0.5"
+                  style={{ fontFamily: "'DM Mono', monospace" }}
+                >
+                  TOTAL RECORDED DEATHS · 2024
+                </div>
+                <div
+                  className="text-2xl font-extrabold text-foreground"
+                  style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                >
+                  1,245
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground text-right max-w-[120px] leading-relaxed">
+                Source: Dept of Statistics Malaysia
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="py-20 px-6 border-t border-border">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-14">
+            <div
+              className="text-xs text-primary font-medium mb-3"
+              style={{ fontFamily: "'DM Mono', monospace" }}
+            >
+              HOW IT WORKS
+            </div>
+            <h2
+              className="text-3xl md:text-4xl font-bold text-foreground"
+              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+            >
+              Three steps, practically useful
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {features.map((f, i) => (
+              <div
+                key={f.title}
+                className="p-6 rounded-2xl bg-card border border-border hover:border-primary/30 transition-colors group"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors shrink-0">
+                    <f.icon size={18} className="text-primary" />
+                  </div>
+                  <span
+                    className="text-xs text-primary font-medium"
+                    style={{ fontFamily: "'DM Mono', monospace" }}
+                  >
+                    STEP 0{i + 1}
+                  </span>
+                </div>
+                <h3
+                  className="text-base font-semibold text-foreground mb-2"
+                  style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                >
+                  {f.title}
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {f.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* What you get */}
+      <section className="py-20 px-6 bg-secondary/30 border-t border-border">
+        <div className="max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div>
+              <div
+                className="text-xs text-primary font-medium mb-3"
+                style={{ fontFamily: "'DM Mono', monospace" }}
+              >
+                WHAT YOU GET
+              </div>
+              <h2
+                className="text-3xl font-bold text-foreground mb-4"
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                Population context, not personal predictions
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-6">
+                SihatQ draws on the Department of Statistics Malaysia&apos;s cause-of-death data to show you what the health landscape looks like for people in your demographic group. You get context — not a verdict.
+              </p>
+              <div className="space-y-3">
+                {[
+                  "Leading causes of death for your age group and state",
+                  "Side-by-side comparison across age, state, and sex",
+                  "Practical preventive actions based on your lifestyle",
+                  "No personal risk score, no alarming projections",
+                ].map((item) => (
+                  <div key={item} className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={11} className="text-primary" />
+                    </div>
+                    <span className="text-sm text-muted-foreground">{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-4">
+              {[
+                {
+                  icon: Shield,
+                  title: "Data from DOSM",
+                  desc: "Statistics on Causes of Death, Malaysia 2024 — official government dataset.",
+                },
+                {
+                  icon: Users,
+                  title: "Built for Malaysians aged 40–60",
+                  desc: "Designed around the demographic groups most represented in preventive-health decisions.",
+                },
+                {
+                  icon: Heart,
+                  title: "Not a medical device",
+                  desc: "This is an educational decision-support tool. Always consult a healthcare professional for personal advice.",
+                },
+              ].map((card) => (
+                <div key={card.title} className="flex gap-4 p-5 rounded-2xl bg-card border border-border">
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <card.icon size={16} className="text-primary" />
+                  </div>
+                  <div>
+                    <div
+                      className="text-sm font-semibold text-foreground mb-1"
+                      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                    >
+                      {card.title}
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{card.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="py-20 px-6 border-t border-border text-center">
+        <div className="max-w-xl mx-auto">
+          <h2
+            className="text-3xl md:text-4xl font-bold text-foreground mb-4"
+            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+          >
+            Ready to understand your context?
+          </h2>
+          <p className="text-muted-foreground mb-8">
+            Takes about two minutes. No account required. Your data is not stored.
+          </p>
+          <button
+            onClick={() => onNavigate("profile")}
+            className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-lg hover:bg-primary/90 transition-all hover:scale-105"
+            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+          >
+            Create my profile <ArrowRight size={18} />
+          </button>
+          <div className="flex items-center justify-center gap-6 mt-8 text-xs text-muted-foreground">
+            {["No account needed", "Takes 2 minutes", "Data not stored"].map((t) => (
+              <div key={t} className="flex items-center gap-1.5">
+                <Check size={12} className="text-primary" />
+                {t}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-border py-8 px-6 text-center text-xs text-muted-foreground">
+        <div className="flex items-center justify-center gap-2 mb-2">
+          <LangkahSihatLogo size={20} />
+          <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+            SihatQ by Langkah Sihat
+          </span>
+        </div>
+        <p>
+          © 2025 Langkah Sihat · Kuala Lumpur, Malaysia · Educational tool only. Not a medical device.
+        </p>
+      </footer>
+    </div>
+  );
+}
+
+// ── Personal Health Profile ────────────────────────────────────────────
+function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+  const [step, setStep] = useState(0);
+  const [form, setForm] = useState({
+    ageGroup: "",
+    sex: "",
+    ethnicity: "",
+    state: "",
+    activity: "",
+    smoking: "",
+    alcohol: "",
+    diet: "",
+    familyHistory: "",
+  });
+
+  const malaysianStates = [
+    "Johor", "Kedah", "Kelantan", "Melaka", "Negeri Sembilan",
+    "Pahang", "Perak", "Perlis", "Pulau Pinang", "Sabah",
+    "Sarawak", "Selangor", "Terengganu",
+    "W.P. Kuala Lumpur", "W.P. Labuan", "W.P. Putrajaya",
+  ];
+
+  const steps = [
+    {
+      title: "Demographic Profile",
+      subtitle: "Tell us about yourself so we can match you to the right comparison group.",
+      fields: [
+        {
+          key: "ageGroup",
+          label: "Age Group",
+          type: "select",
+          options: ["40–44", "45–49", "50–54", "55–59", "60–64"],
+        },
+        {
+          key: "sex",
+          label: "Sex",
+          type: "select",
+          options: ["Male", "Female", "Prefer not to say"],
+        },
+        {
+          key: "ethnicity",
+          label: "Ethnicity",
+          type: "select",
+          options: ["Malay", "Chinese", "Indian", "Other Bumiputera", "Other", "Prefer not to say"],
+        },
+        {
+          key: "state",
+          label: "State of Residence",
+          type: "select",
+          options: malaysianStates,
+        },
+      ],
+    },
+    {
+      title: "Lifestyle Information",
+      subtitle: "This helps us provide relevant preventive-health recommendations.",
+      fields: [
+        {
+          key: "activity",
+          label: "Physical Activity",
+          type: "select",
+          options: ["Rarely", "Sometimes", "Regularly"],
+        },
+        {
+          key: "smoking",
+          label: "Smoking Status",
+          type: "select",
+          options: ["Current smoker", "Former smoker", "Non-smoker", "Prefer not to say"],
+        },
+        {
+          key: "alcohol",
+          label: "Alcohol Use",
+          type: "select",
+          options: ["None", "Occasionally", "Frequently", "Prefer not to say"],
+        },
+        {
+          key: "diet",
+          label: "Dietary Pattern",
+          type: "select",
+          options: ["Mostly balanced", "Mixed", "Often highly processed", "Prefer not to say"],
+        },
+        {
+          key: "familyHistory",
+          label: "Family History",
+          type: "select",
+          options: ["No known history", "Heart disease", "Diabetes", "Cancer", "Other", "Prefer not to say"],
+        },
+      ],
+    },
+  ];
+
+  const currentStep = steps[step];
+  const progress = ((step + 1) / steps.length) * 100;
+
+  function update(key: string, value: string) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  function handleNext() {
+    if (step < steps.length - 1) setStep(step + 1);
+    else onNavigate("analysing");
+  }
+
+  return (
+    <div
+      className="min-h-screen bg-background text-foreground flex flex-col"
+      style={{ fontFamily: "'Inter', sans-serif" }}
+    >
+      <div className="max-w-xl mx-auto w-full px-6 pt-32 pb-16 flex-1">
+        {/* Progress */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <span
+              className="text-xs text-muted-foreground"
+              style={{ fontFamily: "'DM Mono', monospace" }}
+            >
+              STEP {step + 1} OF {steps.length}
+            </span>
+            <span
+              className="text-xs text-primary"
+              style={{ fontFamily: "'DM Mono', monospace" }}
+            >
+              {Math.round(progress)}%
+            </span>
+          </div>
+          <div className="h-1 bg-secondary rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="flex gap-2 mt-3">
+            {steps.map((s, i) => (
+              <div
+                key={s.title}
+                className={`h-0.5 flex-1 rounded-full transition-colors ${i <= step ? "bg-primary" : "bg-border"}`}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-8">
+          <div
+            className="text-xs text-primary mb-1"
+            style={{ fontFamily: "'DM Mono', monospace" }}
+          >
+            HEALTH PROFILE
+          </div>
+          <h2
+            className="text-2xl font-bold text-foreground mb-1"
+            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+          >
+            {currentStep.title}
+          </h2>
+          <p className="text-sm text-muted-foreground">{currentStep.subtitle}</p>
+        </div>
+
+        <div className="space-y-5">
+          {currentStep.fields.map((field) => (
+            <div key={field.key}>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                {field.label}
+              </label>
+              <div className="relative">
+                <select
+                  value={form[field.key as keyof typeof form]}
+                  onChange={(e) => update(field.key, e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-input-background border border-border text-foreground text-sm appearance-none focus:outline-none focus:border-primary/50 transition-colors"
+                >
+                  <option value="" className="bg-card">
+                    Select an option
+                  </option>
+                  {field.options.map((o) => (
+                    <option key={o} value={o} className="bg-card">
+                      {o}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-3 mt-8">
+          {step > 0 && (
+            <button
+              onClick={() => setStep(step - 1)}
+              className="flex-1 py-3.5 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors font-medium"
+            >
+              Back
+            </button>
+          )}
+          <button
+            onClick={handleNext}
+            className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors"
+            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+          >
+            {step < steps.length - 1 ? (
+              <>
+                Continue <ChevronRight size={16} />
+              </>
+            ) : (
+              <>
+                Generate My Insights <Zap size={16} />
+              </>
+            )}
+          </button>
+        </div>
+
+        <div className="mt-6 flex items-start gap-2 p-4 rounded-xl bg-secondary border border-border">
+          <Shield size={14} className="text-primary mt-0.5 shrink-0" />
+          <p className="text-xs text-muted-foreground">
+            {step === 0
+              ? "Only the information needed for this prototype is used to generate your results. We do not store personal data."
+              : "This tool provides population-level information and does not diagnose or predict individual health outcomes. Consult a healthcare professional for personal advice."}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Analysing Profile ─────────────────────────────────────────────────
+function AnalysingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+  const [progress, setProgress] = useState(0);
+  const [currentTask, setCurrentTask] = useState(0);
+
+  const tasks = [
+    { label: "Reading demographic profile", icon: Users },
+    { label: "Matching comparison group", icon: Activity },
+    { label: "Loading DOSM mortality dataset", icon: BarChart2 },
+    { label: "Identifying top causes of death", icon: TrendingUp },
+    { label: "Calculating population statistics", icon: Brain },
+    { label: "Preparing preventive recommendations", icon: Target },
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setProgress((p) => {
+        if (p >= 100) {
+          clearInterval(interval);
+          setTimeout(() => onNavigate("insights"), 600);
+          return 100;
+        }
+        return p + 1;
+      });
+    }, 50);
+    return () => clearInterval(interval);
+  }, [onNavigate]);
+
+  useEffect(() => {
+    const taskIndex = Math.floor((progress / 100) * tasks.length);
+    setCurrentTask(Math.min(taskIndex, tasks.length - 1));
+  }, [progress, tasks.length]);
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center px-6">
+      <div className="max-w-md w-full text-center">
+        {/* Pulsing orb */}
+        <div className="relative mx-auto mb-10 w-32 h-32">
+          <div className="absolute inset-0 rounded-full bg-primary/10 animate-ping" />
+          <div className="absolute inset-4 rounded-full bg-primary/20 animate-pulse" />
+          <div className="absolute inset-8 rounded-full bg-primary/40 flex items-center justify-center">
+            <Brain size={24} className="text-primary" />
+          </div>
+        </div>
+
+        <div
+          className="text-xs text-primary mb-3"
+          style={{ fontFamily: "'DM Mono', monospace" }}
+        >
+          MATCHING PROFILE
+        </div>
+        <h2
+          className="text-2xl font-bold text-foreground mb-2"
+          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+        >
+          Matching your profile with Malaysian mortality data…
+        </h2>
+        <p className="text-sm text-muted-foreground mb-10">
+          We are finding the closest population comparison group from the
+          Department of Statistics Malaysia dataset.
+        </p>
+
+        {/* Progress bar */}
+        <div className="mb-6">
+          <div className="flex justify-between text-xs mb-2">
+            <span
+              className="text-muted-foreground"
+              style={{ fontFamily: "'DM Mono', monospace" }}
+            >
+              PROGRESS
+            </span>
+            <span
+              className="text-primary font-medium"
+              style={{ fontFamily: "'DM Mono', monospace" }}
+            >
+              {progress}%
+            </span>
+          </div>
+          <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-100"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Tasks */}
+        <div className="space-y-3 text-left">
+          {tasks.map((task, i) => {
+            const done = i < currentTask;
+            const active = i === currentTask;
+            return (
+              <div
+                key={task.label}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  active
+                    ? "bg-primary/10 border border-primary/20"
+                    : done
+                      ? "opacity-50"
+                      : "opacity-25"
+                }`}
+              >
+                <div
+                  className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                    done
+                      ? "bg-primary/20"
+                      : active
+                        ? "bg-primary/30 animate-pulse"
+                        : "bg-secondary"
+                  }`}
+                >
+                  {done ? (
+                    <Check size={12} className="text-primary" />
+                  ) : (
+                    <task.icon
+                      size={12}
+                      className={active ? "text-primary" : "text-muted-foreground"}
+                    />
+                  )}
+                </div>
+                <span
+                  className={`text-sm ${active ? "text-foreground font-medium" : "text-muted-foreground"}`}
+                >
+                  {task.label}
+                </span>
+                {active && (
+                  <div className="ml-auto flex gap-0.5">
+                    {[0, 1, 2].map((d) => (
+                      <div
+                        key={d}
+                        className="w-1 h-1 rounded-full bg-primary animate-bounce"
+                        style={{ animationDelay: `${d * 0.15}s` }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Health Insights ───────────────────────────────────────────────────
+function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+  const [compareView, setCompareView] = useState<"age" | "state" | "sex">("age");
+  const [showDataNote, setShowDataNote] = useState(false);
+
+  const causes = [
+    { rank: 1, name: "Ischaemic heart diseases", count: 312, pct: 25.1, color: "#ef4444" },
+    { rank: 2, name: "Pneumonia", count: 198, pct: 15.9, color: "#f59e0b" },
+    { rank: 3, name: "Diabetes mellitus", count: 174, pct: 14.0, color: "#f59e0b" },
+    { rank: 4, name: "Kidney failure", count: 143, pct: 11.5, color: "#3b82f6" },
+    { rank: 5, name: "Transport accidents", count: 97, pct: 7.8, color: "#6b8099" },
+  ];
+
+  const maxCount = causes[0].count;
+
+  const ageCompare = [
+    { group: "40–44", deaths: 820 },
+    { group: "45–49", deaths: 1245 },
+    { group: "50–54", deaths: 1890 },
+    { group: "55–59", deaths: 2640 },
+    { group: "60–64", deaths: 3810 },
+  ];
+
+  const stateCompare = [
+    { group: "Selangor", deaths: 1245 },
+    { group: "Johor", deaths: 980 },
+    { group: "Perak", deaths: 870 },
+    { group: "Pulau Pinang", deaths: 640 },
+    { group: "Sabah", deaths: 590 },
+  ];
+
+  const sexCompare = [
+    { group: "Male", deaths: 1245 },
+    { group: "Female", deaths: 892 },
+  ];
+
+  const compareData = compareView === "age" ? ageCompare : compareView === "state" ? stateCompare : sexCompare;
+  const compareMax = Math.max(...compareData.map((d) => d.deaths));
+
+  return (
+    <div
+      className="min-h-screen bg-background text-foreground"
+      style={{ fontFamily: "'Inter', sans-serif" }}
+    >
+      <div className="max-w-4xl mx-auto px-6 pt-28 pb-16">
+
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 mb-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+              <span
+                className="text-xs text-primary font-medium"
+                style={{ fontFamily: "'DM Mono', monospace" }}
+              >
+                BASED ON YOUR SELECTED COMPARISON GROUP
+              </span>
+            </div>
+            <h1
+              className="text-3xl font-bold text-foreground"
+              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+            >
+              Your health insights
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Population-level mortality patterns · Example data
+            </p>
+          </div>
+          <button
+            onClick={() => onNavigate("profile")}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:border-primary/30 text-sm font-medium transition-colors shrink-0"
+          >
+            Edit profile
+          </button>
+        </div>
+
+        {/* Comparison group summary card */}
+        <div className="bg-card border border-primary/20 rounded-2xl p-6 mb-6">
+          <div
+            className="text-xs text-primary mb-2"
+            style={{ fontFamily: "'DM Mono', monospace" }}
+          >
+            YOUR COMPARISON GROUP
+          </div>
+          <div
+            className="text-xl font-bold text-foreground mb-2"
+            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+          >
+            Malaysian adults aged 45–49 in Selangor
+          </div>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            These results describe patterns in the selected population group. They are not a prediction of your personal health outcome. Some profile combinations may use the closest available dataset category.
+          </p>
+          <div className="flex flex-wrap gap-3 mt-4">
+            {[
+              { label: "Age Group", value: "45–49" },
+              { label: "State", value: "Selangor" },
+              { label: "Sex", value: "Male" },
+              { label: "Ethnicity", value: "Malay" },
+            ].map((item) => (
+              <div key={item.label} className="px-3 py-1.5 rounded-lg bg-secondary border border-border">
+                <span className="text-xs text-muted-foreground">{item.label}: </span>
+                <span className="text-xs font-medium text-foreground">{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Total deaths stat card */}
+        <div className="grid md:grid-cols-3 gap-5 mb-6">
+          <div className="bg-card border border-border rounded-2xl p-6 flex flex-col justify-center">
+            <div className="flex items-center gap-2 mb-3">
+              <div
+                className="text-xs text-muted-foreground"
+                style={{ fontFamily: "'DM Mono', monospace" }}
+              >
+                TOTAL RECORDED DEATHS
+              </div>
+              <button
+                onClick={() => setShowDataNote(!showDataNote)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Info size={13} />
+              </button>
+            </div>
+            <div
+              className="text-5xl font-extrabold text-foreground mb-1"
+              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+            >
+              1,245
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              For this selected population category in 2024
+            </p>
+            {showDataNote && (
+              <div className="mt-3 p-3 rounded-lg bg-secondary border border-border text-xs text-muted-foreground leading-relaxed">
+                This is a population-level count for the selected demographic group. It represents all recorded deaths in that category, not a personal risk figure.
+              </div>
+            )}
+          </div>
+
+          <div className="md:col-span-2 bg-card border border-border rounded-2xl p-6">
+            <div
+              className="text-xs text-muted-foreground mb-1"
+              style={{ fontFamily: "'DM Mono', monospace" }}
+            >
+              LEADING CAUSES
+            </div>
+            <p className="text-xs text-muted-foreground mb-4 opacity-60">Example data — illustrative values only</p>
+            <div className="flex flex-wrap gap-3">
+              {[
+                { icon: Heart, label: "Heart disease", color: "text-red-400" },
+                { icon: Wind, label: "Pneumonia", color: "text-blue-400" },
+                { icon: Activity, label: "Diabetes", color: "text-yellow-400" },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-secondary">
+                  <item.icon size={13} className={item.color} />
+                  <span className="text-xs text-foreground font-medium">{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Top causes of death */}
+        <div className="bg-card border border-border rounded-2xl p-6 mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <div
+                className="text-xs text-muted-foreground mb-1"
+                style={{ fontFamily: "'DM Mono', monospace" }}
+              >
+                SELECTED CAUSES OF DEATH
+              </div>
+              <h2
+                className="text-lg font-semibold text-foreground"
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                Top 5 causes for this group
+              </h2>
+            </div>
+            <span className="text-xs text-muted-foreground px-2 py-1 rounded-lg bg-secondary border border-border">
+              Example data
+            </span>
+          </div>
+          <div className="space-y-4">
+            {causes.map((cause) => (
+              <div key={cause.rank} className="flex items-center gap-4">
+                <div
+                  className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
+                  style={{ background: `${cause.color}18`, color: cause.color, fontFamily: "'DM Mono', monospace" }}
+                >
+                  {cause.rank}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-sm font-medium text-foreground truncate pr-4">{cause.name}</span>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span
+                        className="text-xs text-muted-foreground"
+                        style={{ fontFamily: "'DM Mono', monospace" }}
+                      >
+                        {cause.count.toLocaleString()} deaths
+                      </span>
+                      <span
+                        className="text-xs font-semibold w-10 text-right"
+                        style={{ color: cause.color, fontFamily: "'DM Mono', monospace" }}
+                      >
+                        {cause.pct}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${(cause.count / maxCount) * 100}%`, background: cause.color }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Comparison section */}
+        <div className="bg-card border border-border rounded-2xl p-6 mb-6">
+          <div
+            className="text-xs text-muted-foreground mb-4"
+            style={{ fontFamily: "'DM Mono', monospace" }}
+          >
+            COMPARISON VIEW
+          </div>
+          <div className="flex gap-1 p-1 bg-secondary rounded-xl mb-6 w-fit">
+            {(["age", "state", "sex"] as const).map((view) => (
+              <button
+                key={view}
+                onClick={() => setCompareView(view)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  compareView === view
+                    ? "bg-card text-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {view === "age" ? "By Age Group" : view === "state" ? "By State" : "By Sex"}
+              </button>
+            ))}
+          </div>
+          {compareView !== "age" && (
+            <p className="text-xs text-muted-foreground mb-4 italic">
+              Note: State and sex comparisons use a different source category from DOSM.
+            </p>
+          )}
+          <div className="space-y-3">
+            {compareData.map((row) => (
+              <div key={row.group} className="flex items-center gap-4">
+                <div
+                  className="text-xs text-muted-foreground w-20 shrink-0 text-right"
+                  style={{ fontFamily: "'DM Mono', monospace" }}
+                >
+                  {row.group}
+                </div>
+                <div className="flex-1 h-6 bg-secondary rounded-lg overflow-hidden relative">
+                  <div
+                    className="h-full rounded-lg transition-all duration-700 flex items-center justify-end pr-2"
+                    style={{
+                      width: `${(row.deaths / compareMax) * 100}%`,
+                      background: row.group === "45–49" || row.group === "Selangor" || row.group === "Male"
+                        ? "#00d4aa"
+                        : "rgba(0,212,170,0.25)",
+                    }}
+                  >
+                    <span
+                      className="text-xs font-semibold"
+                      style={{
+                        color: row.group === "45–49" || row.group === "Selangor" || row.group === "Male"
+                          ? "#080d12"
+                          : "#00d4aa",
+                        fontFamily: "'DM Mono', monospace",
+                      }}
+                    >
+                      {row.deaths.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground mt-4 opacity-60">Total recorded deaths · Example data · 2024</p>
+        </div>
+
+        {/* Data source panel */}
+        <div className="bg-secondary border border-border rounded-2xl p-5 mb-8">
+          <div className="flex items-start gap-3">
+            <Shield size={16} className="text-primary mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <div
+                className="text-xs font-semibold text-foreground mb-1"
+                style={{ fontFamily: "'DM Mono', monospace" }}
+              >
+                DATA SOURCE
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed mb-2">
+                Department of Statistics Malaysia, Statistics on Causes of Death, 2024.
+                Last available dataset year: 2024.
+              </p>
+              <button className="text-xs text-primary hover:underline font-medium">
+                View data limitations →
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* CTA */}
+        <div className="text-center">
+          <button
+            onClick={() => onNavigate("action-plan")}
+            className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-base hover:bg-primary/90 transition-all hover:scale-105"
+            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+          >
+            See my recommended actions <ArrowRight size={16} />
+          </button>
+          <p className="text-xs text-muted-foreground mt-3">
+            Suggestions based on lifestyle information and general preventive-health guidance.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Action Plan ───────────────────────────────────────────────────────
+function ActionPlanPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+  const [expanded, setExpanded] = useState<string | null>("stress");
+
+  const pillars = [
+    {
+      id: "stress",
+      icon: Brain,
+      color: "#ef4444",
+      tag: "HIGH PRIORITY",
+      title: "Stress & Mental Wellbeing",
+      subtitle: "Target: Reduce stress index from 48 → 65 in 8 weeks",
+      tasks: [
+        { done: false, text: "10-min guided breathwork every morning (Wim Hof method)" },
+        { done: false, text: "Digital screen cut-off at 9:30 PM — use blue light filter after 7 PM" },
+        { done: true, text: "Schedule 2× weekly nature walks of 30+ minutes" },
+        { done: false, text: "Start journalling: 3 gratitude entries + 1 worry discharge nightly" },
+        { done: false, text: "Explore cognitive behavioural therapy (CBT) with Naluri Health app" },
+      ],
+    },
+    {
+      id: "metabolic",
+      icon: Activity,
+      color: "#f59e0b",
+      tag: "MODERATE PRIORITY",
+      title: "Metabolic & Blood Glucose",
+      subtitle: "Target: Improve metabolic score from 62 → 75 in 12 weeks",
+      tasks: [
+        { done: false, text: "Replace white rice with brown rice or cauliflower rice at dinner" },
+        { done: false, text: "Limit nasi lemak to once per week — swap santan for coconut water" },
+        { done: true, text: "Add 10-min post-meal walks (proven to reduce glucose spikes by 30%)" },
+        { done: false, text: "Introduce intermittent fasting: 12:12 window Mon–Fri" },
+        { done: false, text: "Reduce teh tarik to 1× weekly — switch to unsweetened teh O" },
+      ],
+    },
+    {
+      id: "fitness",
+      icon: Dumbbell,
+      color: "#f59e0b",
+      tag: "MODERATE PRIORITY",
+      title: "Physical Fitness",
+      subtitle: "Target: Improve fitness score from 55 → 70 in 10 weeks",
+      tasks: [
+        { done: false, text: "3× strength training per week (compound lifts, 45 min)" },
+        { done: false, text: "2× Zone 2 cardio sessions (brisk walk/cycle, 40–50 min, HR 120–140)" },
+        { done: true, text: "Use standing desk or desk converter for 4+ hours of workday" },
+        { done: false, text: "Park 500m from office and walk the remainder each day" },
+        { done: false, text: "Join a weekend futsal group or recreational badminton league" },
+      ],
+    },
+    {
+      id: "nutrition",
+      icon: Apple,
+      color: "#00d4aa",
+      tag: "MAINTENANCE",
+      title: "Nutrition & Hydration",
+      subtitle: "Target: Sustain nutrition score above 75",
+      tasks: [
+        { done: true, text: "Maintain 2 litres of plain water daily — set phone reminders" },
+        { done: true, text: "Include 5 servings of vegetables and fruit per day" },
+        { done: false, text: "Add weekly salmon or mackerel for omega-3 (2× per week)" },
+        { done: true, text: "Reduce processed food to < 10% of weekly caloric intake" },
+      ],
+    },
+  ];
+
+  const [checks, setChecks] = useState<Record<string, boolean[]>>(() =>
+    Object.fromEntries(pillars.map((p) => [p.id, p.tasks.map((t) => t.done)]))
+  );
+
+  function toggleCheck(pillarId: string, idx: number) {
+    setChecks((prev) => {
+      const arr = [...prev[pillarId]];
+      arr[idx] = !arr[idx];
+      return { ...prev, [pillarId]: arr };
+    });
+  }
+
+  const weeklyBarData = [
+    { day: "Mon", done: 4, total: 5 },
+    { day: "Tue", done: 3, total: 5 },
+    { day: "Wed", done: 5, total: 5 },
+    { day: "Thu", done: 2, total: 5 },
+    { day: "Fri", done: 4, total: 5 },
+    { day: "Sat", done: 3, total: 5 },
+    { day: "Sun", done: 1, total: 5 },
+  ];
+
+  const totalTasks = pillars.reduce((a, p) => a + p.tasks.length, 0);
+  const doneTasks = Object.values(checks).reduce(
+    (a, arr) => a + arr.filter(Boolean).length,
+    0
+  );
+
+  return (
+    <div
+      className="min-h-screen bg-background text-foreground"
+      style={{ fontFamily: "'Inter', sans-serif" }}
+    >
+      <div className="max-w-5xl mx-auto px-6 pt-28 pb-16">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
+          <div>
+            <div
+              className="text-xs text-primary mb-1"
+              style={{ fontFamily: "'DM Mono', monospace" }}
+            >
+              PERSONALISED ACTION PLAN · WEEK 1 OF 12
+            </div>
+            <h1
+              className="text-3xl font-bold text-foreground"
+              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+            >
+              Your Langkah Sihat Plan
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              4 health pillars · {totalTasks} weekly actions · Tailored to your
+              biomarker profile
+            </p>
+          </div>
+          <button
+            onClick={() => onNavigate("insights")}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:border-primary/30 text-sm font-medium transition-colors shrink-0"
+          >
+            ← Back to Insights
+          </button>
+        </div>
+
+        {/* Progress strip */}
+        <div className="grid md:grid-cols-2 gap-5 mb-8">
+          <div className="bg-card border border-border rounded-2xl p-6">
+            <div
+              className="text-xs text-muted-foreground mb-4"
+              style={{ fontFamily: "'DM Mono', monospace" }}
+            >
+              THIS WEEK'S COMPLETION
+            </div>
+            <div className="flex items-end gap-3 mb-3">
+              <span
+                className="text-4xl font-extrabold text-primary"
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                {doneTasks}
+              </span>
+              <span className="text-muted-foreground text-sm mb-1">
+                / {totalTasks} actions
+              </span>
+            </div>
+            <div className="h-2 bg-secondary rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-500"
+                style={{ width: `${(doneTasks / totalTasks) * 100}%` }}
+              />
+            </div>
+          </div>
+          <div className="bg-card border border-border rounded-2xl p-6">
+            <div
+              className="text-xs text-muted-foreground mb-4"
+              style={{ fontFamily: "'DM Mono', monospace" }}
+            >
+              DAILY COMPLETION RATE
+            </div>
+            <ResponsiveContainer width="100%" height={70}>
+              <BarChart data={weeklyBarData} barSize={16}>
+                <XAxis
+                  dataKey="day"
+                  tick={{ fill: "#6b8099", fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Bar dataKey="done" radius={4}>
+                  {weeklyBarData.map((_, i) => (
+                    <Cell
+                      key={i}
+                      fill={_ .done === _.total ? "#00d4aa" : "#1a2535"}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Pillars accordion */}
+        <div className="space-y-4">
+          {pillars.map((pillar) => {
+            const isOpen = expanded === pillar.id;
+            const pillarChecks = checks[pillar.id];
+            const doneCount = pillarChecks.filter(Boolean).length;
+            return (
+              <div
+                key={pillar.id}
+                className="bg-card border border-border rounded-2xl overflow-hidden"
+              >
+                <button
+                  onClick={() => setExpanded(isOpen ? null : pillar.id)}
+                  className="w-full flex items-center gap-4 p-5 text-left hover:bg-secondary/50 transition-colors"
+                >
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ background: `${pillar.color}18` }}
+                  >
+                    <pillar.icon size={18} style={{ color: pillar.color }} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span
+                        className="text-xs font-medium"
+                        style={{
+                          color: pillar.color,
+                          fontFamily: "'DM Mono', monospace",
+                        }}
+                      >
+                        {pillar.tag}
+                      </span>
+                    </div>
+                    <div
+                      className="font-semibold text-foreground text-sm"
+                      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                    >
+                      {pillar.title}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {pillar.subtitle}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span
+                      className="text-xs"
+                      style={{
+                        color: pillar.color,
+                        fontFamily: "'DM Mono', monospace",
+                      }}
+                    >
+                      {doneCount}/{pillar.tasks.length}
+                    </span>
+                    <ChevronDown
+                      size={16}
+                      className={`text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
+                    />
+                  </div>
+                </button>
+
+                {isOpen && (
+                  <div className="px-5 pb-5 border-t border-border">
+                    <div className="mt-4 space-y-3">
+                      {pillar.tasks.map((task, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => toggleCheck(pillar.id, idx)}
+                          className="w-full flex items-start gap-3 text-left group"
+                        >
+                          <div
+                            className={`mt-0.5 w-5 h-5 rounded-md border shrink-0 flex items-center justify-center transition-colors ${
+                              pillarChecks[idx]
+                                ? "bg-primary/20 border-primary/40"
+                                : "border-border group-hover:border-primary/30"
+                            }`}
+                          >
+                            {pillarChecks[idx] && (
+                              <Check size={11} className="text-primary" />
+                            )}
+                          </div>
+                          <span
+                            className={`text-sm leading-relaxed ${
+                              pillarChecks[idx]
+                                ? "line-through text-muted-foreground"
+                                : "text-foreground"
+                            }`}
+                          >
+                            {task.text}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* CTA */}
+        <div className="mt-10 p-6 rounded-2xl border border-primary/20 bg-primary/5 flex flex-col md:flex-row items-start md:items-center gap-4">
+          <div className="flex-1">
+            <div
+              className="text-sm font-semibold text-foreground mb-1"
+              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+            >
+              Schedule Your 4-Week Check-In
+            </div>
+            <p className="text-xs text-muted-foreground">
+              SihatQ will re-analyse your profile in 28 days and update your
+              plan based on your progress. Expect a 5–12 point score improvement
+              if you complete 80%+ of actions.
+            </p>
+          </div>
+          <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors shrink-0">
+            <Clock size={14} /> Set Reminder
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Root App ──────────────────────────────────────────────────────────
+export default function App() {
+  const [screen, setScreen] = useState<Screen>("landing");
+
+  function navigate(s: Screen) {
+    setScreen(s);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  return (
+    <div className="min-h-screen bg-background" style={{ scrollbarWidth: "none" }}>
+      <style>{`
+        ::-webkit-scrollbar { display: none; }
+        * { font-family: 'Inter', sans-serif; }
+      `}</style>
+      <Nav onNavigate={navigate} current={screen} />
+      {screen === "landing" && <LandingPage onNavigate={navigate} />}
+      {screen === "profile" && <ProfilePage onNavigate={navigate} />}
+      {screen === "analysing" && <AnalysingPage onNavigate={navigate} />}
+      {screen === "insights" && <InsightsPage onNavigate={navigate} />}
+      {screen === "action-plan" && <ActionPlanPage onNavigate={navigate} />}
+    </div>
+  );
+}
