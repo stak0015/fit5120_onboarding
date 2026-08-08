@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: wiseage
+      POSTGRES_USER: wiseage
+      POSTGRES_PASSWORD: wiseage
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wiseage -d wiseage"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - wiseage_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  wiseage_postgres_data:
+

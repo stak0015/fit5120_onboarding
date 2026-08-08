@@ -1,11 +1,8 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  Cell,
-  XAxis,
-} from "recharts";
+  ActionPlanPage as DeviceActionPlanPage,
+  type ActionProfile,
+} from "./ActionPlanPage";
 import {
   Activity,
   Heart,
@@ -18,12 +15,7 @@ import {
   TrendingUp,
   Users,
   BarChart2,
-  Clock,
   Target,
-  Droplets,
-  Dumbbell,
-  Apple,
-  Wind,
   ChevronDown,
   Info,
 } from "lucide-react";
@@ -34,6 +26,175 @@ type Screen =
   | "analysing"
   | "insights"
   | "action-plan";
+
+type ProfileForm = ActionProfile;
+
+type CauseStat = {
+  display_rank: number;
+  cause_of_death: string;
+  death_count: number;
+  percentage: number | null;
+};
+
+type ComparisonRow = {
+  group: string;
+  death_count: number;
+  percentage: number | null;
+};
+
+type ComparisonView = {
+  available: boolean;
+  dimension_type: string;
+  cause_of_death: string;
+  selected_group: string | null;
+  percentage_basis: string;
+  scope_note: string;
+  missing_groups: string[];
+  rows: ComparisonRow[];
+};
+
+type InsightsResponse = {
+  profile: {
+    year: number;
+    age_group: string;
+    state: string;
+    sex: string;
+    ethnicity: string;
+  };
+  data_year: number;
+  match: {
+    dimension_type: string;
+    comparison_group: string;
+    matching_method: string;
+    source_tables: string[];
+    selected_cause: string;
+    percentage_basis: string;
+    causes: CauseStat[];
+  };
+  all_cause_context: {
+    available: boolean;
+    death_count: number | null;
+    unit: string;
+    is_age_specific: boolean;
+    scope: string;
+    matching_method: string;
+    note: string;
+  };
+  comparisons: Record<"age" | "state" | "sex", ComparisonView>;
+  comparisons_by_cause?: Record<
+    string,
+    Record<"age" | "state" | "sex", ComparisonView>
+  >;
+  source: string;
+  limitations: string[];
+  disclaimer: string;
+};
+
+type MetadataResponse = {
+  years: number[];
+  states: string[];
+  age_groups: string[];
+  sexes: string[];
+  ethnicities: string[];
+  primary_match_dimensions: string[];
+  source: string;
+};
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000").replace(/\/$/, "");
+const EMPTY_PROFILE: ProfileForm = {
+  ageGroup: "",
+  sex: "",
+  ethnicity: "",
+  state: "",
+  activity: "",
+  smoking: "",
+  alcohol: "",
+  diet: "",
+  familyHistory: "",
+  sleepQuality: "",
+  stressLevel: "",
+};
+const PROFILE_STORAGE_KEY = "wiseage.profile.v1";
+const PROFILE_FIELDS: (keyof ProfileForm)[] = [
+  "ageGroup",
+  "sex",
+  "ethnicity",
+  "state",
+  "activity",
+  "smoking",
+  "alcohol",
+  "diet",
+  "familyHistory",
+  "sleepQuality",
+  "stressLevel",
+];
+
+type StoredProfile = {
+  version: 1;
+  profile: ProfileForm;
+  savedAt: string;
+};
+
+function loadSavedProfile(): StoredProfile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredProfile>;
+    if (parsed.version !== 1 || !parsed.profile || typeof parsed.savedAt !== "string") {
+      return null;
+    }
+    const profile = PROFILE_FIELDS.reduce<ProfileForm>(
+      (result, field) => ({
+        ...result,
+        [field]: typeof parsed.profile?.[field] === "string" ? parsed.profile[field] : "",
+      }),
+      { ...EMPTY_PROFILE }
+    );
+    const requiredFields: (keyof ProfileForm)[] = [
+      "ageGroup",
+      "sex",
+      "ethnicity",
+      "state",
+      "activity",
+      "smoking",
+      "alcohol",
+      "diet",
+      "familyHistory",
+    ];
+    if (!requiredFields.every((field) => profile[field])) return null;
+    return { version: 1, profile, savedAt: parsed.savedAt };
+  } catch {
+    return null;
+  }
+}
+const DEFAULT_METADATA: MetadataResponse = {
+  years: [2024],
+  states: [
+    "Johor", "Kedah", "Kelantan", "Melaka", "Negeri Sembilan",
+    "Pahang", "Perak", "Perlis", "Pulau Pinang", "Sabah",
+    "Sarawak", "Selangor", "Terengganu", "W.P. Kuala Lumpur",
+    "W.P. Labuan", "W.P. Putrajaya",
+  ],
+  age_groups: [
+    "0", "1-4", "5-9", "10-14", "15-19", "20-24", "25-29",
+    "30-34", "35-39", "40-44", "45-49", "50-54", "55-59",
+    "60-64", "65-69", "70-74", "75-79", "80-84",
+    "85 dan lebih 85 and over",
+  ],
+  sexes: ["Male", "Female", "Prefer not to say"],
+  ethnicities: ["Malay", "Chinese", "Indian", "Other Bumiputera", "Other", "Prefer not to say"],
+  primary_match_dimensions: ["state", "age_group"],
+  source: "Department of Statistics Malaysia",
+};
+
+const CAUSE_COLORS = ["#ef4444", "#f59e0b", "#f59e0b", "#3b82f6", "#6b8099"];
+
+function displayAgeGroup(ageGroup: string) {
+  if (ageGroup === "0") return "Under 1";
+  if (ageGroup === "85 dan lebih 85 and over") return "85 and over";
+  return ageGroup.replace(/-/g, "–");
+}
 
 // ── Logo ─────────────────────────────────────────────────────────────
 function LangkahSihatLogo({ size = 32 }: { size?: number }) {
@@ -80,13 +241,7 @@ function Nav({
             className="text-sm font-bold text-foreground"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
-            SihatQ
-          </div>
-          <div
-            className="text-[10px] text-muted-foreground"
-            style={{ fontFamily: "'DM Mono', monospace" }}
-          >
-            LANGKAH SIHAT
+            WiseAge Health
           </div>
         </div>
       </button>
@@ -221,7 +376,7 @@ function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                 </div>
               </div>
               <span className="text-xs px-2 py-1 rounded-lg bg-secondary border border-border text-muted-foreground">
-                Example data
+                Preview
               </span>
             </div>
             <div className="space-y-3 mb-5">
@@ -259,17 +414,17 @@ function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                   className="text-xs text-muted-foreground mb-0.5"
                   style={{ fontFamily: "'DM Mono', monospace" }}
                 >
-                  TOTAL RECORDED DEATHS · 2024
+                  LIVE INSIGHTS AVAILABLE AFTER PROFILE
                 </div>
                 <div
                   className="text-2xl font-extrabold text-foreground"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
-                  1,245
+                  —
                 </div>
               </div>
               <div className="text-xs text-muted-foreground text-right max-w-[120px] leading-relaxed">
-                Source: Dept of Statistics Malaysia
+                Select your profile to load current DOSM values
               </div>
             </div>
           </div>
@@ -343,7 +498,7 @@ function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                 Population context, not personal predictions
               </h2>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                SihatQ draws on the Department of Statistics Malaysia&apos;s cause-of-death data to show you what the health landscape looks like for people in your demographic group. You get context — not a verdict.
+                WiseAge Health draws on the Department of Statistics Malaysia&apos;s cause-of-death data to show you what the health landscape looks like for people in your demographic group. You get context — not a verdict.
               </p>
               <div className="space-y-3">
                 {[
@@ -419,7 +574,7 @@ function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             Create my profile <ArrowRight size={18} />
           </button>
           <div className="flex items-center justify-center gap-6 mt-8 text-xs text-muted-foreground">
-            {["No account needed", "Takes 2 minutes", "Data not stored"].map((t) => (
+            {["No account needed", "Takes 2 minutes", "Saved only on this device"].map((t) => (
               <div key={t} className="flex items-center gap-1.5">
                 <Check size={12} className="text-primary" />
                 {t}
@@ -429,42 +584,35 @@ function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
         </div>
       </section>
 
-      <footer className="border-t border-border py-8 px-6 text-center text-xs text-muted-foreground">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <LangkahSihatLogo size={20} />
-          <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-            SihatQ by Langkah Sihat
-          </span>
-        </div>
-        <p>
-          © 2025 Langkah Sihat · Kuala Lumpur, Malaysia · Educational tool only. Not a medical device.
-        </p>
-      </footer>
     </div>
   );
 }
 
 // ── Personal Health Profile ────────────────────────────────────────────
-function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+function ProfilePage({
+  initialProfile,
+  metadata,
+  onGenerate,
+  hasSavedProfile,
+  storageError,
+  onClearSavedProfile,
+}: {
+  initialProfile: ProfileForm;
+  metadata: MetadataResponse;
+  onGenerate: (profile: ProfileForm) => void;
+  hasSavedProfile: boolean;
+  storageError: string;
+  onClearSavedProfile: () => void;
+}) {
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState({
-    ageGroup: "",
-    sex: "",
-    ethnicity: "",
-    state: "",
-    activity: "",
-    smoking: "",
-    alcohol: "",
-    diet: "",
-    familyHistory: "",
-  });
+  const [form, setForm] = useState<ProfileForm>(initialProfile);
+  const [validationMessage, setValidationMessage] = useState("");
 
-  const malaysianStates = [
-    "Johor", "Kedah", "Kelantan", "Melaka", "Negeri Sembilan",
-    "Pahang", "Perak", "Perlis", "Pulau Pinang", "Sabah",
-    "Sarawak", "Selangor", "Terengganu",
-    "W.P. Kuala Lumpur", "W.P. Labuan", "W.P. Putrajaya",
-  ];
+  useEffect(() => {
+    setForm(initialProfile);
+    setStep(0);
+    setValidationMessage("");
+  }, [initialProfile]);
 
   const steps = [
     {
@@ -475,25 +623,25 @@ function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
           key: "ageGroup",
           label: "Age Group",
           type: "select",
-          options: ["40–44", "45–49", "50–54", "55–59", "60–64"],
+          options: metadata.age_groups,
         },
         {
           key: "sex",
           label: "Sex",
           type: "select",
-          options: ["Male", "Female", "Prefer not to say"],
+          options: metadata.sexes,
         },
         {
           key: "ethnicity",
           label: "Ethnicity",
           type: "select",
-          options: ["Malay", "Chinese", "Indian", "Other Bumiputera", "Other", "Prefer not to say"],
+          options: metadata.ethnicities,
         },
         {
           key: "state",
           label: "State of Residence",
           type: "select",
-          options: malaysianStates,
+          options: metadata.states,
         },
       ],
     },
@@ -531,6 +679,20 @@ function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
           type: "select",
           options: ["No known history", "Heart disease", "Diabetes", "Cancer", "Other", "Prefer not to say"],
         },
+        {
+          key: "sleepQuality",
+          label: "Sleep Quality",
+          type: "select",
+          options: ["Poor", "Fair", "Good", "Prefer not to say"],
+          optional: true,
+        },
+        {
+          key: "stressLevel",
+          label: "Stress Level",
+          type: "select",
+          options: ["Low", "Moderate", "High", "Prefer not to say"],
+          optional: true,
+        },
       ],
     },
   ];
@@ -540,11 +702,23 @@ function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
 
   function update(key: string, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
+    setValidationMessage("");
   }
 
   function handleNext() {
+    const missingFields = currentStep.fields
+      .filter(
+        (field) =>
+          !("optional" in field && field.optional) &&
+          !form[field.key as keyof ProfileForm]
+      )
+      .map((field) => field.label);
+    if (missingFields.length > 0) {
+      setValidationMessage(`Please select: ${missingFields.join(", ")}.`);
+      return;
+    }
     if (step < steps.length - 1) setStep(step + 1);
-    else onNavigate("analysing");
+    else onGenerate(form);
   }
 
   return (
@@ -606,6 +780,9 @@ function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             <div key={field.key}>
               <label className="block text-sm font-medium text-foreground mb-2">
                 {field.label}
+                {"optional" in field && field.optional && (
+                  <span className="ml-1 font-normal text-muted-foreground">(optional)</span>
+                )}
               </label>
               <div className="relative">
                 <select
@@ -618,7 +795,7 @@ function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                   </option>
                   {field.options.map((o) => (
                     <option key={o} value={o} className="bg-card">
-                      {o}
+                      {field.key === "ageGroup" ? displayAgeGroup(o) : o}
                     </option>
                   ))}
                 </select>
@@ -630,6 +807,18 @@ function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             </div>
           ))}
         </div>
+
+        {validationMessage && (
+          <div className="mt-4 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-xs text-red-200">
+            {validationMessage}
+          </div>
+        )}
+
+        {storageError && (
+          <div className="mt-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-200">
+            {storageError}
+          </div>
+        )}
 
         <div className="flex gap-3 mt-8">
           {step > 0 && (
@@ -661,19 +850,39 @@ function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
           <Shield size={14} className="text-primary mt-0.5 shrink-0" />
           <p className="text-xs text-muted-foreground">
             {step === 0
-              ? "Only the information needed for this prototype is used to generate your results. We do not store personal data."
+              ? "Your submitted profile is saved only in this browser so it is available after a refresh. The API and PostgreSQL do not store it."
               : "This tool provides population-level information and does not diagnose or predict individual health outcomes. Consult a healthcare professional for personal advice."}
           </p>
         </div>
+        {hasSavedProfile && (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+            <span className="text-xs text-muted-foreground">A profile is saved on this device.</span>
+            <button
+              type="button"
+              onClick={onClearSavedProfile}
+              className="shrink-0 text-xs font-medium text-red-300 transition-colors hover:text-red-200"
+            >
+              Clear saved profile
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 // ── Analysing Profile ─────────────────────────────────────────────────
-function AnalysingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
-  const [progress, setProgress] = useState(0);
-  const [currentTask, setCurrentTask] = useState(0);
+function AnalysingPage({
+  error,
+  onRetry,
+  onNavigate,
+}: {
+  error: string;
+  onRetry: () => void;
+  onNavigate: (s: Screen) => void;
+}) {
+  const progress = error ? 100 : 62;
+  const currentTask = error ? 5 : 2;
 
   const tasks = [
     { label: "Reading demographic profile", icon: Users },
@@ -683,25 +892,6 @@ function AnalysingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
     { label: "Calculating population statistics", icon: Brain },
     { label: "Preparing preventive recommendations", icon: Target },
   ];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 100) {
-          clearInterval(interval);
-          setTimeout(() => onNavigate("insights"), 600);
-          return 100;
-        }
-        return p + 1;
-      });
-    }, 50);
-    return () => clearInterval(interval);
-  }, [onNavigate]);
-
-  useEffect(() => {
-    const taskIndex = Math.floor((progress / 100) * tasks.length);
-    setCurrentTask(Math.min(taskIndex, tasks.length - 1));
-  }, [progress, tasks.length]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-6">
@@ -725,11 +915,10 @@ function AnalysingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
           className="text-2xl font-bold text-foreground mb-2"
           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
         >
-          Matching your profile with Malaysian mortality data…
+          {error ? "We could not load your mortality insights" : "Matching your profile with Malaysian mortality data…"}
         </h2>
         <p className="text-sm text-muted-foreground mb-10">
-          We are finding the closest population comparison group from the
-          Department of Statistics Malaysia dataset.
+          {error || "We are querying the Department of Statistics Malaysia dataset and preparing the supported comparison views."}
         </p>
 
         {/* Progress bar */}
@@ -810,49 +999,73 @@ function AnalysingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             );
           })}
         </div>
+
+        {error ? (
+          <div className="mt-8 flex gap-3">
+            <button
+              onClick={onRetry}
+              className="flex-1 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => onNavigate("profile")}
+              className="flex-1 rounded-xl border border-border px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              Edit profile
+            </button>
+          </div>
+        ) : (
+          <p className="mt-6 text-xs text-muted-foreground">Waiting for the API response…</p>
+        )}
       </div>
     </div>
   );
 }
 
 // ── Health Insights ───────────────────────────────────────────────────
-function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+function InsightsPage({
+  data,
+  onNavigate,
+}: {
+  data: InsightsResponse | null;
+  onNavigate: (s: Screen) => void;
+}) {
   const [compareView, setCompareView] = useState<"age" | "state" | "sex">("age");
+  const [compareCause, setCompareCause] = useState<string | null>(null);
   const [showDataNote, setShowDataNote] = useState(false);
 
-  const causes = [
-    { rank: 1, name: "Ischaemic heart diseases", count: 312, pct: 25.1, color: "#ef4444" },
-    { rank: 2, name: "Pneumonia", count: 198, pct: 15.9, color: "#f59e0b" },
-    { rank: 3, name: "Diabetes mellitus", count: 174, pct: 14.0, color: "#f59e0b" },
-    { rank: 4, name: "Kidney failure", count: 143, pct: 11.5, color: "#3b82f6" },
-    { rank: 5, name: "Transport accidents", count: 97, pct: 7.8, color: "#6b8099" },
-  ];
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-background px-6 pt-36 text-center">
+        <h1 className="text-2xl font-bold text-foreground">Create a profile to view insights</h1>
+        <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
+          Submit a profile first so the API can load the supported Malaysian population comparison group.
+        </p>
+        <button
+          onClick={() => onNavigate("profile")}
+          className="mt-6 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground"
+        >
+          Create profile
+        </button>
+      </div>
+    );
+  }
 
-  const maxCount = causes[0].count;
-
-  const ageCompare = [
-    { group: "40–44", deaths: 820 },
-    { group: "45–49", deaths: 1245 },
-    { group: "50–54", deaths: 1890 },
-    { group: "55–59", deaths: 2640 },
-    { group: "60–64", deaths: 3810 },
-  ];
-
-  const stateCompare = [
-    { group: "Selangor", deaths: 1245 },
-    { group: "Johor", deaths: 980 },
-    { group: "Perak", deaths: 870 },
-    { group: "Pulau Pinang", deaths: 640 },
-    { group: "Sabah", deaths: 590 },
-  ];
-
-  const sexCompare = [
-    { group: "Male", deaths: 1245 },
-    { group: "Female", deaths: 892 },
-  ];
-
-  const compareData = compareView === "age" ? ageCompare : compareView === "state" ? stateCompare : sexCompare;
-  const compareMax = Math.max(...compareData.map((d) => d.deaths));
+  const causes = data.match.causes.map((cause, index) => ({
+    ...cause,
+    color: CAUSE_COLORS[index % CAUSE_COLORS.length],
+  }));
+  const maxCount = causes[0]?.death_count ?? 1;
+  const activeCause =
+    compareCause && data.comparisons_by_cause?.[compareCause]
+      ? compareCause
+      : data.match.selected_cause;
+  const comparison =
+    data.comparisons_by_cause?.[activeCause]?.[compareView] ??
+    data.comparisons[compareView];
+  const compareData = comparison.rows;
+  const compareMax = Math.max(...compareData.map((row) => row.death_count), 1);
 
   return (
     <div
@@ -880,7 +1093,7 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
               Your health insights
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Population-level mortality patterns · Example data
+              Population-level mortality patterns · {data.data_year}
             </p>
           </div>
           <button
@@ -903,17 +1116,17 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             className="text-xl font-bold text-foreground mb-2"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
-            Malaysian adults aged 45–49 in Selangor
+            {data.match.comparison_group}
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            These results describe patterns in the selected population group. They are not a prediction of your personal health outcome. Some profile combinations may use the closest available dataset category.
+            {data.disclaimer} {data.match.matching_method === "national_age_fallback" && "This result uses the Malaysia-wide age category because the selected state/age category was unavailable."}
           </p>
           <div className="flex flex-wrap gap-3 mt-4">
             {[
-              { label: "Age Group", value: "45–49" },
-              { label: "State", value: "Selangor" },
-              { label: "Sex", value: "Male" },
-              { label: "Ethnicity", value: "Malay" },
+              { label: "Age Group", value: displayAgeGroup(data.profile.age_group) },
+              { label: "State", value: data.profile.state },
+              { label: "Sex", value: data.profile.sex },
+              { label: "Ethnicity", value: data.profile.ethnicity },
             ].map((item) => (
               <div key={item.label} className="px-3 py-1.5 rounded-lg bg-secondary border border-border">
                 <span className="text-xs text-muted-foreground">{item.label}: </span>
@@ -931,7 +1144,7 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                 className="text-xs text-muted-foreground"
                 style={{ fontFamily: "'DM Mono', monospace" }}
               >
-                TOTAL RECORDED DEATHS
+                ALL-CAUSE CONTEXT
               </div>
               <button
                 onClick={() => setShowDataNote(!showDataNote)}
@@ -944,14 +1157,18 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
               className="text-5xl font-extrabold text-foreground mb-1"
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             >
-              1,245
+              {data.all_cause_context.available && data.all_cause_context.death_count !== null
+                ? data.all_cause_context.death_count.toLocaleString()
+                : "—"}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              For this selected population category in 2024
+              {data.all_cause_context.available
+                ? `${data.all_cause_context.scope} · ${data.data_year} · not age-specific`
+                : "Unavailable for this profile"}
             </p>
             {showDataNote && (
               <div className="mt-3 p-3 rounded-lg bg-secondary border border-border text-xs text-muted-foreground leading-relaxed">
-                This is a population-level count for the selected demographic group. It represents all recorded deaths in that category, not a personal risk figure.
+                {data.all_cause_context.note} It is not an age-specific count and is not a personal risk figure.
               </div>
             )}
           </div>
@@ -963,16 +1180,12 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             >
               LEADING CAUSES
             </div>
-            <p className="text-xs text-muted-foreground mb-4 opacity-60">Example data — illustrative values only</p>
+            <p className="text-xs text-muted-foreground mb-4 opacity-60">Live values from the selected DOSM comparison group</p>
             <div className="flex flex-wrap gap-3">
-              {[
-                { icon: Heart, label: "Heart disease", color: "text-red-400" },
-                { icon: Wind, label: "Pneumonia", color: "text-blue-400" },
-                { icon: Activity, label: "Diabetes", color: "text-yellow-400" },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-secondary">
-                  <item.icon size={13} className={item.color} />
-                  <span className="text-xs text-foreground font-medium">{item.label}</span>
+              {causes.slice(0, 3).map((item) => (
+                <div key={item.cause_of_death} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-secondary">
+                  <Activity size={13} style={{ color: item.color }} />
+                  <span className="text-xs text-foreground font-medium">{item.cause_of_death}</span>
                 </div>
               ))}
             </div>
@@ -993,44 +1206,36 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                 className="text-lg font-semibold text-foreground"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
-                Top 5 causes for this group
+                Selected causes for this group
               </h2>
             </div>
             <span className="text-xs text-muted-foreground px-2 py-1 rounded-lg bg-secondary border border-border">
-              Example data
+              Live API data
             </span>
           </div>
           <div className="space-y-4">
             {causes.map((cause) => (
-              <div key={cause.rank} className="flex items-center gap-4">
+              <div key={cause.cause_of_death} className="flex items-center gap-4">
                 <div
                   className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
                   style={{ background: `${cause.color}18`, color: cause.color, fontFamily: "'DM Mono', monospace" }}
                 >
-                  {cause.rank}
+                  {cause.display_rank}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm font-medium text-foreground truncate pr-4">{cause.name}</span>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span
-                        className="text-xs text-muted-foreground"
-                        style={{ fontFamily: "'DM Mono', monospace" }}
-                      >
-                        {cause.count.toLocaleString()} deaths
-                      </span>
-                      <span
-                        className="text-xs font-semibold w-10 text-right"
-                        style={{ color: cause.color, fontFamily: "'DM Mono', monospace" }}
-                      >
-                        {cause.pct}%
-                      </span>
-                    </div>
+                    <span className="text-sm font-medium text-foreground truncate pr-4">{cause.cause_of_death}</span>
+                    <span
+                      className="shrink-0 text-xs font-semibold"
+                      style={{ color: cause.color, fontFamily: "'DM Mono', monospace" }}
+                    >
+                      {cause.death_count.toLocaleString()} deaths
+                    </span>
                   </div>
                   <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-700"
-                      style={{ width: `${(cause.count / maxCount) * 100}%`, background: cause.color }}
+                      style={{ width: `${(cause.death_count / maxCount) * 100}%`, background: cause.color }}
                     />
                   </div>
                 </div>
@@ -1047,6 +1252,33 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
           >
             COMPARISON VIEW
           </div>
+          <div className="mb-5 max-w-md">
+            <label
+              htmlFor="comparison-cause"
+              className="mb-2 block text-[11px] text-muted-foreground"
+              style={{ fontFamily: "'DM Mono', monospace" }}
+            >
+              SELECT A CAUSE
+            </label>
+            <div className="relative">
+              <select
+                id="comparison-cause"
+                value={activeCause}
+                onChange={(event) => setCompareCause(event.target.value)}
+                className="w-full appearance-none rounded-xl border border-border bg-secondary px-4 py-3 pr-10 text-sm font-medium text-foreground transition-colors focus:border-primary/50 focus:outline-none"
+              >
+                {causes.map((cause) => (
+                  <option key={cause.cause_of_death} value={cause.cause_of_death}>
+                    {cause.cause_of_death}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={15}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+            </div>
+          </div>
           <div className="flex gap-1 p-1 bg-secondary rounded-xl mb-6 w-fit">
             {(["age", "state", "sex"] as const).map((view) => (
               <button
@@ -1062,26 +1294,30 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
               </button>
             ))}
           </div>
-          {compareView !== "age" && (
-            <p className="text-xs text-muted-foreground mb-4 italic">
-              Note: State and sex comparisons use a different source category from DOSM.
-            </p>
+          <p className="text-xs text-muted-foreground mb-4 italic">
+            {comparison.scope_note} Cause: {comparison.cause_of_death}.
+          </p>
+          {!comparison.available && (
+            <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
+              A complete comparison is unavailable. Missing groups: {comparison.missing_groups.length > 0 ? comparison.missing_groups.join(", ") : "not reported by the source"}. Missing records have not been treated as zero.
+            </div>
           )}
-          <div className="space-y-3">
-            {compareData.map((row) => (
+          {compareData.length > 0 ? (
+            <div className="space-y-3">
+              {compareData.map((row) => (
               <div key={row.group} className="flex items-center gap-4">
                 <div
                   className="text-xs text-muted-foreground w-20 shrink-0 text-right"
                   style={{ fontFamily: "'DM Mono', monospace" }}
                 >
-                  {row.group}
+                  {compareView === "age" ? displayAgeGroup(row.group) : row.group}
                 </div>
                 <div className="flex-1 h-6 bg-secondary rounded-lg overflow-hidden relative">
                   <div
                     className="h-full rounded-lg transition-all duration-700 flex items-center justify-end pr-2"
                     style={{
-                      width: `${(row.deaths / compareMax) * 100}%`,
-                      background: row.group === "45–49" || row.group === "Selangor" || row.group === "Male"
+                      width: `${(row.death_count / compareMax) * 100}%`,
+                      background: row.group === comparison.selected_group
                         ? "#00d4aa"
                         : "rgba(0,212,170,0.25)",
                     }}
@@ -1089,20 +1325,27 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                     <span
                       className="text-xs font-semibold"
                       style={{
-                        color: row.group === "45–49" || row.group === "Selangor" || row.group === "Male"
+                        color: row.group === comparison.selected_group
                           ? "#080d12"
                           : "#00d4aa",
                         fontFamily: "'DM Mono', monospace",
                       }}
                     >
-                      {row.deaths.toLocaleString()}
+                      {row.death_count.toLocaleString()}
                     </span>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground mt-4 opacity-60">Total recorded deaths · Example data · 2024</p>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-secondary px-4 py-6 text-center text-xs text-muted-foreground">
+              This comparison is not reported for the selected cause and profile.
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground mt-4 opacity-60">
+            Recorded deaths for {comparison.cause_of_death} · {data.data_year}
+          </p>
         </div>
 
         {/* Data source panel */}
@@ -1117,12 +1360,13 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                 DATA SOURCE
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed mb-2">
-                Department of Statistics Malaysia, Statistics on Causes of Death, 2024.
-                Last available dataset year: 2024.
+                {data.source} Last available dataset year: {data.data_year}.
               </p>
-              <button className="text-xs text-primary hover:underline font-medium">
-                View data limitations →
-              </button>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                {data.limitations.map((limitation) => (
+                  <p key={limitation}>• {limitation}</p>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -1145,319 +1389,104 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
   );
 }
 
-// ── Action Plan ───────────────────────────────────────────────────────
-function ActionPlanPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
-  const [expanded, setExpanded] = useState<string | null>("stress");
-
-  const pillars = [
-    {
-      id: "stress",
-      icon: Brain,
-      color: "#ef4444",
-      tag: "HIGH PRIORITY",
-      title: "Stress & Mental Wellbeing",
-      subtitle: "Target: Reduce stress index from 48 → 65 in 8 weeks",
-      tasks: [
-        { done: false, text: "10-min guided breathwork every morning (Wim Hof method)" },
-        { done: false, text: "Digital screen cut-off at 9:30 PM — use blue light filter after 7 PM" },
-        { done: true, text: "Schedule 2× weekly nature walks of 30+ minutes" },
-        { done: false, text: "Start journalling: 3 gratitude entries + 1 worry discharge nightly" },
-        { done: false, text: "Explore cognitive behavioural therapy (CBT) with Naluri Health app" },
-      ],
-    },
-    {
-      id: "metabolic",
-      icon: Activity,
-      color: "#f59e0b",
-      tag: "MODERATE PRIORITY",
-      title: "Metabolic & Blood Glucose",
-      subtitle: "Target: Improve metabolic score from 62 → 75 in 12 weeks",
-      tasks: [
-        { done: false, text: "Replace white rice with brown rice or cauliflower rice at dinner" },
-        { done: false, text: "Limit nasi lemak to once per week — swap santan for coconut water" },
-        { done: true, text: "Add 10-min post-meal walks (proven to reduce glucose spikes by 30%)" },
-        { done: false, text: "Introduce intermittent fasting: 12:12 window Mon–Fri" },
-        { done: false, text: "Reduce teh tarik to 1× weekly — switch to unsweetened teh O" },
-      ],
-    },
-    {
-      id: "fitness",
-      icon: Dumbbell,
-      color: "#f59e0b",
-      tag: "MODERATE PRIORITY",
-      title: "Physical Fitness",
-      subtitle: "Target: Improve fitness score from 55 → 70 in 10 weeks",
-      tasks: [
-        { done: false, text: "3× strength training per week (compound lifts, 45 min)" },
-        { done: false, text: "2× Zone 2 cardio sessions (brisk walk/cycle, 40–50 min, HR 120–140)" },
-        { done: true, text: "Use standing desk or desk converter for 4+ hours of workday" },
-        { done: false, text: "Park 500m from office and walk the remainder each day" },
-        { done: false, text: "Join a weekend futsal group or recreational badminton league" },
-      ],
-    },
-    {
-      id: "nutrition",
-      icon: Apple,
-      color: "#00d4aa",
-      tag: "MAINTENANCE",
-      title: "Nutrition & Hydration",
-      subtitle: "Target: Sustain nutrition score above 75",
-      tasks: [
-        { done: true, text: "Maintain 2 litres of plain water daily — set phone reminders" },
-        { done: true, text: "Include 5 servings of vegetables and fruit per day" },
-        { done: false, text: "Add weekly salmon or mackerel for omega-3 (2× per week)" },
-        { done: true, text: "Reduce processed food to < 10% of weekly caloric intake" },
-      ],
-    },
-  ];
-
-  const [checks, setChecks] = useState<Record<string, boolean[]>>(() =>
-    Object.fromEntries(pillars.map((p) => [p.id, p.tasks.map((t) => t.done)]))
-  );
-
-  function toggleCheck(pillarId: string, idx: number) {
-    setChecks((prev) => {
-      const arr = [...prev[pillarId]];
-      arr[idx] = !arr[idx];
-      return { ...prev, [pillarId]: arr };
-    });
-  }
-
-  const weeklyBarData = [
-    { day: "Mon", done: 4, total: 5 },
-    { day: "Tue", done: 3, total: 5 },
-    { day: "Wed", done: 5, total: 5 },
-    { day: "Thu", done: 2, total: 5 },
-    { day: "Fri", done: 4, total: 5 },
-    { day: "Sat", done: 3, total: 5 },
-    { day: "Sun", done: 1, total: 5 },
-  ];
-
-  const totalTasks = pillars.reduce((a, p) => a + p.tasks.length, 0);
-  const doneTasks = Object.values(checks).reduce(
-    (a, arr) => a + arr.filter(Boolean).length,
-    0
-  );
-
-  return (
-    <div
-      className="min-h-screen bg-background text-foreground"
-      style={{ fontFamily: "'Inter', sans-serif" }}
-    >
-      <div className="max-w-5xl mx-auto px-6 pt-28 pb-16">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
-          <div>
-            <div
-              className="text-xs text-primary mb-1"
-              style={{ fontFamily: "'DM Mono', monospace" }}
-            >
-              PERSONALISED ACTION PLAN · WEEK 1 OF 12
-            </div>
-            <h1
-              className="text-3xl font-bold text-foreground"
-              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-            >
-              Your Langkah Sihat Plan
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              4 health pillars · {totalTasks} weekly actions · Tailored to your
-              biomarker profile
-            </p>
-          </div>
-          <button
-            onClick={() => onNavigate("insights")}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:border-primary/30 text-sm font-medium transition-colors shrink-0"
-          >
-            ← Back to Insights
-          </button>
-        </div>
-
-        {/* Progress strip */}
-        <div className="grid md:grid-cols-2 gap-5 mb-8">
-          <div className="bg-card border border-border rounded-2xl p-6">
-            <div
-              className="text-xs text-muted-foreground mb-4"
-              style={{ fontFamily: "'DM Mono', monospace" }}
-            >
-              THIS WEEK'S COMPLETION
-            </div>
-            <div className="flex items-end gap-3 mb-3">
-              <span
-                className="text-4xl font-extrabold text-primary"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-              >
-                {doneTasks}
-              </span>
-              <span className="text-muted-foreground text-sm mb-1">
-                / {totalTasks} actions
-              </span>
-            </div>
-            <div className="h-2 bg-secondary rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary rounded-full transition-all duration-500"
-                style={{ width: `${(doneTasks / totalTasks) * 100}%` }}
-              />
-            </div>
-          </div>
-          <div className="bg-card border border-border rounded-2xl p-6">
-            <div
-              className="text-xs text-muted-foreground mb-4"
-              style={{ fontFamily: "'DM Mono', monospace" }}
-            >
-              DAILY COMPLETION RATE
-            </div>
-            <ResponsiveContainer width="100%" height={70}>
-              <BarChart data={weeklyBarData} barSize={16}>
-                <XAxis
-                  dataKey="day"
-                  tick={{ fill: "#6b8099", fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Bar dataKey="done" radius={4}>
-                  {weeklyBarData.map((_, i) => (
-                    <Cell
-                      key={i}
-                      fill={_ .done === _.total ? "#00d4aa" : "#1a2535"}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Pillars accordion */}
-        <div className="space-y-4">
-          {pillars.map((pillar) => {
-            const isOpen = expanded === pillar.id;
-            const pillarChecks = checks[pillar.id];
-            const doneCount = pillarChecks.filter(Boolean).length;
-            return (
-              <div
-                key={pillar.id}
-                className="bg-card border border-border rounded-2xl overflow-hidden"
-              >
-                <button
-                  onClick={() => setExpanded(isOpen ? null : pillar.id)}
-                  className="w-full flex items-center gap-4 p-5 text-left hover:bg-secondary/50 transition-colors"
-                >
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: `${pillar.color}18` }}
-                  >
-                    <pillar.icon size={18} style={{ color: pillar.color }} />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span
-                        className="text-xs font-medium"
-                        style={{
-                          color: pillar.color,
-                          fontFamily: "'DM Mono', monospace",
-                        }}
-                      >
-                        {pillar.tag}
-                      </span>
-                    </div>
-                    <div
-                      className="font-semibold text-foreground text-sm"
-                      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                    >
-                      {pillar.title}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {pillar.subtitle}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span
-                      className="text-xs"
-                      style={{
-                        color: pillar.color,
-                        fontFamily: "'DM Mono', monospace",
-                      }}
-                    >
-                      {doneCount}/{pillar.tasks.length}
-                    </span>
-                    <ChevronDown
-                      size={16}
-                      className={`text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
-                    />
-                  </div>
-                </button>
-
-                {isOpen && (
-                  <div className="px-5 pb-5 border-t border-border">
-                    <div className="mt-4 space-y-3">
-                      {pillar.tasks.map((task, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => toggleCheck(pillar.id, idx)}
-                          className="w-full flex items-start gap-3 text-left group"
-                        >
-                          <div
-                            className={`mt-0.5 w-5 h-5 rounded-md border shrink-0 flex items-center justify-center transition-colors ${
-                              pillarChecks[idx]
-                                ? "bg-primary/20 border-primary/40"
-                                : "border-border group-hover:border-primary/30"
-                            }`}
-                          >
-                            {pillarChecks[idx] && (
-                              <Check size={11} className="text-primary" />
-                            )}
-                          </div>
-                          <span
-                            className={`text-sm leading-relaxed ${
-                              pillarChecks[idx]
-                                ? "line-through text-muted-foreground"
-                                : "text-foreground"
-                            }`}
-                          >
-                            {task.text}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* CTA */}
-        <div className="mt-10 p-6 rounded-2xl border border-primary/20 bg-primary/5 flex flex-col md:flex-row items-start md:items-center gap-4">
-          <div className="flex-1">
-            <div
-              className="text-sm font-semibold text-foreground mb-1"
-              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-            >
-              Schedule Your 4-Week Check-In
-            </div>
-            <p className="text-xs text-muted-foreground">
-              SihatQ will re-analyse your profile in 28 days and update your
-              plan based on your progress. Expect a 5–12 point score improvement
-              if you complete 80%+ of actions.
-            </p>
-          </div>
-          <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors shrink-0">
-            <Clock size={14} /> Set Reminder
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Root App ──────────────────────────────────────────────────────────
 export default function App() {
+  const [initialStoredProfile] = useState<StoredProfile | null>(loadSavedProfile);
   const [screen, setScreen] = useState<Screen>("landing");
+  const [profile, setProfile] = useState<ProfileForm>(
+    initialStoredProfile?.profile ?? EMPTY_PROFILE
+  );
+  const [profileSavedAt, setProfileSavedAt] = useState<string | null>(
+    initialStoredProfile?.savedAt ?? null
+  );
+  const [profileStorageError, setProfileStorageError] = useState("");
+  const [insights, setInsights] = useState<InsightsResponse | null>(null);
+  const [insightsError, setInsightsError] = useState("");
+  const [metadata, setMetadata] = useState<MetadataResponse>(DEFAULT_METADATA);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMetadata() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/metadata`);
+        if (!response.ok) return;
+        const payload = await response.json() as MetadataResponse;
+        if (!cancelled && payload.states.length > 0 && payload.age_groups.length > 0) {
+          setMetadata(payload);
+        }
+      } catch {
+        // The built-in supported values keep the profile usable while the API is offline.
+      }
+    }
+
+    loadMetadata();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function navigate(s: Screen) {
     setScreen(s);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function generateInsights(nextProfile: ProfileForm) {
+    setProfile(nextProfile);
+    const savedAt = new Date().toISOString();
+    try {
+      const storedProfile: StoredProfile = {
+        version: 1,
+        profile: nextProfile,
+        savedAt,
+      };
+      window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(storedProfile));
+      setProfileSavedAt(savedAt);
+      setProfileStorageError("");
+    } catch {
+      setProfileStorageError("This browser could not save your profile on this device.");
+    }
+    setInsights(null);
+    setInsightsError("");
+    setScreen("analysing");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/insights`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          year: metadata.years[0] ?? 2024,
+          age_group: nextProfile.ageGroup,
+          state: nextProfile.state,
+          sex: nextProfile.sex,
+          ethnicity: nextProfile.ethnicity,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        const detail = Array.isArray(payload?.detail)
+          ? payload.detail.map((item: { msg?: string }) => item.msg).join(" ")
+          : payload?.detail;
+        throw new Error(detail || `The insights service returned HTTP ${response.status}.`);
+      }
+      setInsights(payload as InsightsResponse);
+      setScreen("insights");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error) {
+      setInsightsError(error instanceof Error ? error.message : "Unable to load insights.");
+    }
+  }
+
+  function clearSavedProfile() {
+    try {
+      window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+      setProfileStorageError("");
+    } catch {
+      setProfileStorageError("This browser could not remove the saved profile.");
+    }
+    setProfile({ ...EMPTY_PROFILE });
+    setProfileSavedAt(null);
+    setInsights(null);
   }
 
   return (
@@ -1468,10 +1497,33 @@ export default function App() {
       `}</style>
       <Nav onNavigate={navigate} current={screen} />
       {screen === "landing" && <LandingPage onNavigate={navigate} />}
-      {screen === "profile" && <ProfilePage onNavigate={navigate} />}
-      {screen === "analysing" && <AnalysingPage onNavigate={navigate} />}
-      {screen === "insights" && <InsightsPage onNavigate={navigate} />}
-      {screen === "action-plan" && <ActionPlanPage onNavigate={navigate} />}
+      {screen === "profile" && (
+        <ProfilePage
+          initialProfile={profile}
+          metadata={metadata}
+          onGenerate={generateInsights}
+          hasSavedProfile={profileSavedAt !== null}
+          storageError={profileStorageError}
+          onClearSavedProfile={clearSavedProfile}
+        />
+      )}
+      {screen === "analysing" && (
+        <AnalysingPage
+          error={insightsError}
+          onRetry={() => generateInsights(profile)}
+          onNavigate={navigate}
+        />
+      )}
+      {screen === "insights" && <InsightsPage data={insights} onNavigate={navigate} />}
+      {screen === "action-plan" && (
+        <DeviceActionPlanPage
+          profile={profile}
+          year={metadata.years[0] ?? 2024}
+          apiBaseUrl={API_BASE_URL}
+          hasInsights={insights !== null}
+          onNavigate={navigate}
+        />
+      )}
     </div>
   );
 }
