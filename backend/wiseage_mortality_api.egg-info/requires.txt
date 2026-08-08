@@ -1,7 +1,9 @@
 alembic<2,>=1.14
 fastapi<1,>=0.117
+groq<1,>=0.31
 psycopg[binary]<4,>=3.2
 pydantic<3,>=2.10
+python-dotenv<2,>=1.0
 sqlalchemy<2.1,>=2.0
 uvicorn[standard]<1,>=0.34
 

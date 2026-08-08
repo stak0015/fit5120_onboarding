@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  Cell,
-  XAxis,
-} from "recharts";
+  ActionPlanPage as DeviceActionPlanPage,
+  type ActionProfile,
+} from "./ActionPlanPage";
 import {
   Activity,
   Heart,
@@ -18,12 +15,7 @@ import {
   TrendingUp,
   Users,
   BarChart2,
-  Clock,
   Target,
-  Droplets,
-  Dumbbell,
-  Apple,
-  Wind,
   ChevronDown,
   Info,
 } from "lucide-react";
@@ -35,17 +27,7 @@ type Screen =
   | "insights"
   | "action-plan";
 
-type ProfileForm = {
-  ageGroup: string;
-  sex: string;
-  ethnicity: string;
-  state: string;
-  activity: string;
-  smoking: string;
-  alcohol: string;
-  diet: string;
-  familyHistory: string;
-};
+type ProfileForm = ActionProfile;
 
 type CauseStat = {
   display_rank: number;
@@ -129,7 +111,63 @@ const EMPTY_PROFILE: ProfileForm = {
   alcohol: "",
   diet: "",
   familyHistory: "",
+  sleepQuality: "",
+  stressLevel: "",
 };
+const PROFILE_STORAGE_KEY = "wiseage.profile.v1";
+const PROFILE_FIELDS: (keyof ProfileForm)[] = [
+  "ageGroup",
+  "sex",
+  "ethnicity",
+  "state",
+  "activity",
+  "smoking",
+  "alcohol",
+  "diet",
+  "familyHistory",
+  "sleepQuality",
+  "stressLevel",
+];
+
+type StoredProfile = {
+  version: 1;
+  profile: ProfileForm;
+  savedAt: string;
+};
+
+function loadSavedProfile(): StoredProfile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredProfile>;
+    if (parsed.version !== 1 || !parsed.profile || typeof parsed.savedAt !== "string") {
+      return null;
+    }
+    const profile = PROFILE_FIELDS.reduce<ProfileForm>(
+      (result, field) => ({
+        ...result,
+        [field]: typeof parsed.profile?.[field] === "string" ? parsed.profile[field] : "",
+      }),
+      { ...EMPTY_PROFILE }
+    );
+    const requiredFields: (keyof ProfileForm)[] = [
+      "ageGroup",
+      "sex",
+      "ethnicity",
+      "state",
+      "activity",
+      "smoking",
+      "alcohol",
+      "diet",
+      "familyHistory",
+    ];
+    if (!requiredFields.every((field) => profile[field])) return null;
+    return { version: 1, profile, savedAt: parsed.savedAt };
+  } catch {
+    return null;
+  }
+}
 const DEFAULT_METADATA: MetadataResponse = {
   years: [2024],
   states: [
@@ -536,7 +574,7 @@ function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             Create my profile <ArrowRight size={18} />
           </button>
           <div className="flex items-center justify-center gap-6 mt-8 text-xs text-muted-foreground">
-            {["No account needed", "Takes 2 minutes", "Data not stored"].map((t) => (
+            {["No account needed", "Takes 2 minutes", "Saved only on this device"].map((t) => (
               <div key={t} className="flex items-center gap-1.5">
                 <Check size={12} className="text-primary" />
                 {t}
@@ -555,14 +593,26 @@ function ProfilePage({
   initialProfile,
   metadata,
   onGenerate,
+  hasSavedProfile,
+  storageError,
+  onClearSavedProfile,
 }: {
   initialProfile: ProfileForm;
   metadata: MetadataResponse;
   onGenerate: (profile: ProfileForm) => void;
+  hasSavedProfile: boolean;
+  storageError: string;
+  onClearSavedProfile: () => void;
 }) {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<ProfileForm>(initialProfile);
   const [validationMessage, setValidationMessage] = useState("");
+
+  useEffect(() => {
+    setForm(initialProfile);
+    setStep(0);
+    setValidationMessage("");
+  }, [initialProfile]);
 
   const steps = [
     {
@@ -629,6 +679,20 @@ function ProfilePage({
           type: "select",
           options: ["No known history", "Heart disease", "Diabetes", "Cancer", "Other", "Prefer not to say"],
         },
+        {
+          key: "sleepQuality",
+          label: "Sleep Quality",
+          type: "select",
+          options: ["Poor", "Fair", "Good", "Prefer not to say"],
+          optional: true,
+        },
+        {
+          key: "stressLevel",
+          label: "Stress Level",
+          type: "select",
+          options: ["Low", "Moderate", "High", "Prefer not to say"],
+          optional: true,
+        },
       ],
     },
   ];
@@ -643,7 +707,11 @@ function ProfilePage({
 
   function handleNext() {
     const missingFields = currentStep.fields
-      .filter((field) => !form[field.key as keyof ProfileForm])
+      .filter(
+        (field) =>
+          !("optional" in field && field.optional) &&
+          !form[field.key as keyof ProfileForm]
+      )
       .map((field) => field.label);
     if (missingFields.length > 0) {
       setValidationMessage(`Please select: ${missingFields.join(", ")}.`);
@@ -712,6 +780,9 @@ function ProfilePage({
             <div key={field.key}>
               <label className="block text-sm font-medium text-foreground mb-2">
                 {field.label}
+                {"optional" in field && field.optional && (
+                  <span className="ml-1 font-normal text-muted-foreground">(optional)</span>
+                )}
               </label>
               <div className="relative">
                 <select
@@ -740,6 +811,12 @@ function ProfilePage({
         {validationMessage && (
           <div className="mt-4 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-xs text-red-200">
             {validationMessage}
+          </div>
+        )}
+
+        {storageError && (
+          <div className="mt-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-200">
+            {storageError}
           </div>
         )}
 
@@ -773,10 +850,22 @@ function ProfilePage({
           <Shield size={14} className="text-primary mt-0.5 shrink-0" />
           <p className="text-xs text-muted-foreground">
             {step === 0
-              ? "Only the information needed for this prototype is used to generate your results. We do not store personal data."
+              ? "Your submitted profile is saved only in this browser so it is available after a refresh. The API and PostgreSQL do not store it."
               : "This tool provides population-level information and does not diagnose or predict individual health outcomes. Consult a healthcare professional for personal advice."}
           </p>
         </div>
+        {hasSavedProfile && (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+            <span className="text-xs text-muted-foreground">A profile is saved on this device.</span>
+            <button
+              type="button"
+              onClick={onClearSavedProfile}
+              className="shrink-0 text-xs font-medium text-red-300 transition-colors hover:text-red-200"
+            >
+              Clear saved profile
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1300,316 +1389,16 @@ function InsightsPage({
   );
 }
 
-// ── Action Plan ───────────────────────────────────────────────────────
-function ActionPlanPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
-  const [expanded, setExpanded] = useState<string | null>("stress");
-
-  const pillars = [
-    {
-      id: "stress",
-      icon: Brain,
-      color: "#ef4444",
-      tag: "HIGH PRIORITY",
-      title: "Stress & Mental Wellbeing",
-      subtitle: "Target: Reduce stress index from 48 → 65 in 8 weeks",
-      tasks: [
-        { done: false, text: "10-min guided breathwork every morning (Wim Hof method)" },
-        { done: false, text: "Digital screen cut-off at 9:30 PM — use blue light filter after 7 PM" },
-        { done: true, text: "Schedule 2× weekly nature walks of 30+ minutes" },
-        { done: false, text: "Start journalling: 3 gratitude entries + 1 worry discharge nightly" },
-        { done: false, text: "Explore cognitive behavioural therapy (CBT) with Naluri Health app" },
-      ],
-    },
-    {
-      id: "metabolic",
-      icon: Activity,
-      color: "#f59e0b",
-      tag: "MODERATE PRIORITY",
-      title: "Metabolic & Blood Glucose",
-      subtitle: "Target: Improve metabolic score from 62 → 75 in 12 weeks",
-      tasks: [
-        { done: false, text: "Replace white rice with brown rice or cauliflower rice at dinner" },
-        { done: false, text: "Limit nasi lemak to once per week — swap santan for coconut water" },
-        { done: true, text: "Add 10-min post-meal walks (proven to reduce glucose spikes by 30%)" },
-        { done: false, text: "Introduce intermittent fasting: 12:12 window Mon–Fri" },
-        { done: false, text: "Reduce teh tarik to 1× weekly — switch to unsweetened teh O" },
-      ],
-    },
-    {
-      id: "fitness",
-      icon: Dumbbell,
-      color: "#f59e0b",
-      tag: "MODERATE PRIORITY",
-      title: "Physical Fitness",
-      subtitle: "Target: Improve fitness score from 55 → 70 in 10 weeks",
-      tasks: [
-        { done: false, text: "3× strength training per week (compound lifts, 45 min)" },
-        { done: false, text: "2× Zone 2 cardio sessions (brisk walk/cycle, 40–50 min, HR 120–140)" },
-        { done: true, text: "Use standing desk or desk converter for 4+ hours of workday" },
-        { done: false, text: "Park 500m from office and walk the remainder each day" },
-        { done: false, text: "Join a weekend futsal group or recreational badminton league" },
-      ],
-    },
-    {
-      id: "nutrition",
-      icon: Apple,
-      color: "#00d4aa",
-      tag: "MAINTENANCE",
-      title: "Nutrition & Hydration",
-      subtitle: "Target: Sustain nutrition score above 75",
-      tasks: [
-        { done: true, text: "Maintain 2 litres of plain water daily — set phone reminders" },
-        { done: true, text: "Include 5 servings of vegetables and fruit per day" },
-        { done: false, text: "Add weekly salmon or mackerel for omega-3 (2× per week)" },
-        { done: true, text: "Reduce processed food to < 10% of weekly caloric intake" },
-      ],
-    },
-  ];
-
-  const [checks, setChecks] = useState<Record<string, boolean[]>>(() =>
-    Object.fromEntries(pillars.map((p) => [p.id, p.tasks.map((t) => t.done)]))
-  );
-
-  function toggleCheck(pillarId: string, idx: number) {
-    setChecks((prev) => {
-      const arr = [...prev[pillarId]];
-      arr[idx] = !arr[idx];
-      return { ...prev, [pillarId]: arr };
-    });
-  }
-
-  const weeklyBarData = [
-    { day: "Mon", done: 4, total: 5 },
-    { day: "Tue", done: 3, total: 5 },
-    { day: "Wed", done: 5, total: 5 },
-    { day: "Thu", done: 2, total: 5 },
-    { day: "Fri", done: 4, total: 5 },
-    { day: "Sat", done: 3, total: 5 },
-    { day: "Sun", done: 1, total: 5 },
-  ];
-
-  const totalTasks = pillars.reduce((a, p) => a + p.tasks.length, 0);
-  const doneTasks = Object.values(checks).reduce(
-    (a, arr) => a + arr.filter(Boolean).length,
-    0
-  );
-
-  return (
-    <div
-      className="min-h-screen bg-background text-foreground"
-      style={{ fontFamily: "'Inter', sans-serif" }}
-    >
-      <div className="max-w-5xl mx-auto px-6 pt-28 pb-16">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
-          <div>
-            <div
-              className="text-xs text-primary mb-1"
-              style={{ fontFamily: "'DM Mono', monospace" }}
-            >
-              PERSONALISED ACTION PLAN · WEEK 1 OF 12
-            </div>
-            <h1
-              className="text-3xl font-bold text-foreground"
-              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-            >
-              Your Personalised Action Plan
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              4 health pillars · {totalTasks} weekly actions · Tailored to your
-              biomarker profile
-            </p>
-          </div>
-          <button
-            onClick={() => onNavigate("insights")}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:border-primary/30 text-sm font-medium transition-colors shrink-0"
-          >
-            ← Back to Insights
-          </button>
-        </div>
-
-        {/* Progress strip */}
-        <div className="grid md:grid-cols-2 gap-5 mb-8">
-          <div className="bg-card border border-border rounded-2xl p-6">
-            <div
-              className="text-xs text-muted-foreground mb-4"
-              style={{ fontFamily: "'DM Mono', monospace" }}
-            >
-              THIS WEEK'S COMPLETION
-            </div>
-            <div className="flex items-end gap-3 mb-3">
-              <span
-                className="text-4xl font-extrabold text-primary"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-              >
-                {doneTasks}
-              </span>
-              <span className="text-muted-foreground text-sm mb-1">
-                / {totalTasks} actions
-              </span>
-            </div>
-            <div className="h-2 bg-secondary rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary rounded-full transition-all duration-500"
-                style={{ width: `${(doneTasks / totalTasks) * 100}%` }}
-              />
-            </div>
-          </div>
-          <div className="bg-card border border-border rounded-2xl p-6">
-            <div
-              className="text-xs text-muted-foreground mb-4"
-              style={{ fontFamily: "'DM Mono', monospace" }}
-            >
-              DAILY COMPLETION RATE
-            </div>
-            <ResponsiveContainer width="100%" height={70}>
-              <BarChart data={weeklyBarData} barSize={16}>
-                <XAxis
-                  dataKey="day"
-                  tick={{ fill: "#6b8099", fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Bar dataKey="done" radius={4}>
-                  {weeklyBarData.map((_, i) => (
-                    <Cell
-                      key={i}
-                      fill={_ .done === _.total ? "#00d4aa" : "#1a2535"}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Pillars accordion */}
-        <div className="space-y-4">
-          {pillars.map((pillar) => {
-            const isOpen = expanded === pillar.id;
-            const pillarChecks = checks[pillar.id];
-            const doneCount = pillarChecks.filter(Boolean).length;
-            return (
-              <div
-                key={pillar.id}
-                className="bg-card border border-border rounded-2xl overflow-hidden"
-              >
-                <button
-                  onClick={() => setExpanded(isOpen ? null : pillar.id)}
-                  className="w-full flex items-center gap-4 p-5 text-left hover:bg-secondary/50 transition-colors"
-                >
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: `${pillar.color}18` }}
-                  >
-                    <pillar.icon size={18} style={{ color: pillar.color }} />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span
-                        className="text-xs font-medium"
-                        style={{
-                          color: pillar.color,
-                          fontFamily: "'DM Mono', monospace",
-                        }}
-                      >
-                        {pillar.tag}
-                      </span>
-                    </div>
-                    <div
-                      className="font-semibold text-foreground text-sm"
-                      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                    >
-                      {pillar.title}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {pillar.subtitle}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span
-                      className="text-xs"
-                      style={{
-                        color: pillar.color,
-                        fontFamily: "'DM Mono', monospace",
-                      }}
-                    >
-                      {doneCount}/{pillar.tasks.length}
-                    </span>
-                    <ChevronDown
-                      size={16}
-                      className={`text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
-                    />
-                  </div>
-                </button>
-
-                {isOpen && (
-                  <div className="px-5 pb-5 border-t border-border">
-                    <div className="mt-4 space-y-3">
-                      {pillar.tasks.map((task, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => toggleCheck(pillar.id, idx)}
-                          className="w-full flex items-start gap-3 text-left group"
-                        >
-                          <div
-                            className={`mt-0.5 w-5 h-5 rounded-md border shrink-0 flex items-center justify-center transition-colors ${
-                              pillarChecks[idx]
-                                ? "bg-primary/20 border-primary/40"
-                                : "border-border group-hover:border-primary/30"
-                            }`}
-                          >
-                            {pillarChecks[idx] && (
-                              <Check size={11} className="text-primary" />
-                            )}
-                          </div>
-                          <span
-                            className={`text-sm leading-relaxed ${
-                              pillarChecks[idx]
-                                ? "line-through text-muted-foreground"
-                                : "text-foreground"
-                            }`}
-                          >
-                            {task.text}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* CTA */}
-        <div className="mt-10 p-6 rounded-2xl border border-primary/20 bg-primary/5 flex flex-col md:flex-row items-start md:items-center gap-4">
-          <div className="flex-1">
-            <div
-              className="text-sm font-semibold text-foreground mb-1"
-              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-            >
-              Schedule Your 4-Week Check-In
-            </div>
-            <p className="text-xs text-muted-foreground">
-              WiseAge Health will re-analyse your profile in 28 days and update your
-              plan based on your progress. Expect a 5–12 point score improvement
-              if you complete 80%+ of actions.
-            </p>
-          </div>
-          <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors shrink-0">
-            <Clock size={14} /> Set Reminder
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Root App ──────────────────────────────────────────────────────────
 export default function App() {
+  const [initialStoredProfile] = useState<StoredProfile | null>(loadSavedProfile);
   const [screen, setScreen] = useState<Screen>("landing");
-  const [profile, setProfile] = useState<ProfileForm>(EMPTY_PROFILE);
+  const [profile, setProfile] = useState<ProfileForm>(
+    initialStoredProfile?.profile ?? EMPTY_PROFILE
+  );
+  const [profileSavedAt, setProfileSavedAt] = useState<string | null>(
+    initialStoredProfile?.savedAt ?? null
+  );
+  const [profileStorageError, setProfileStorageError] = useState("");
   const [insights, setInsights] = useState<InsightsResponse | null>(null);
   const [insightsError, setInsightsError] = useState("");
   const [metadata, setMetadata] = useState<MetadataResponse>(DEFAULT_METADATA);
@@ -1643,6 +1432,19 @@ export default function App() {
 
   async function generateInsights(nextProfile: ProfileForm) {
     setProfile(nextProfile);
+    const savedAt = new Date().toISOString();
+    try {
+      const storedProfile: StoredProfile = {
+        version: 1,
+        profile: nextProfile,
+        savedAt,
+      };
+      window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(storedProfile));
+      setProfileSavedAt(savedAt);
+      setProfileStorageError("");
+    } catch {
+      setProfileStorageError("This browser could not save your profile on this device.");
+    }
     setInsights(null);
     setInsightsError("");
     setScreen("analysing");
@@ -1675,6 +1477,18 @@ export default function App() {
     }
   }
 
+  function clearSavedProfile() {
+    try {
+      window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+      setProfileStorageError("");
+    } catch {
+      setProfileStorageError("This browser could not remove the saved profile.");
+    }
+    setProfile({ ...EMPTY_PROFILE });
+    setProfileSavedAt(null);
+    setInsights(null);
+  }
+
   return (
     <div className="min-h-screen bg-background" style={{ scrollbarWidth: "none" }}>
       <style>{`
@@ -1684,7 +1498,14 @@ export default function App() {
       <Nav onNavigate={navigate} current={screen} />
       {screen === "landing" && <LandingPage onNavigate={navigate} />}
       {screen === "profile" && (
-        <ProfilePage initialProfile={profile} metadata={metadata} onGenerate={generateInsights} />
+        <ProfilePage
+          initialProfile={profile}
+          metadata={metadata}
+          onGenerate={generateInsights}
+          hasSavedProfile={profileSavedAt !== null}
+          storageError={profileStorageError}
+          onClearSavedProfile={clearSavedProfile}
+        />
       )}
       {screen === "analysing" && (
         <AnalysingPage
@@ -1694,7 +1515,15 @@ export default function App() {
         />
       )}
       {screen === "insights" && <InsightsPage data={insights} onNavigate={navigate} />}
-      {screen === "action-plan" && <ActionPlanPage onNavigate={navigate} />}
+      {screen === "action-plan" && (
+        <DeviceActionPlanPage
+          profile={profile}
+          year={metadata.years[0] ?? 2024}
+          apiBaseUrl={API_BASE_URL}
+          hasInsights={insights !== null}
+          onNavigate={navigate}
+        />
+      )}
     </div>
   );
 }

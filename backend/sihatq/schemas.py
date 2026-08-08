@@ -51,6 +51,43 @@ Ethnicity = Literal[
     "Other",
     "Prefer not to say",
 ]
+ActivityLevel = Literal["Rarely", "Sometimes", "Regularly"]
+SmokingStatus = Literal[
+    "Current smoker", "Former smoker", "Non-smoker", "Prefer not to say"
+]
+AlcoholUse = Literal["None", "Occasionally", "Frequently", "Prefer not to say"]
+DietaryPattern = Literal[
+    "Mostly balanced", "Mixed", "Often highly processed", "Prefer not to say"
+]
+FamilyHistory = Literal[
+    "No known history",
+    "Heart disease",
+    "Diabetes",
+    "Cancer",
+    "Other",
+    "Prefer not to say",
+]
+SleepQuality = Literal["Poor", "Fair", "Good", "Prefer not to say"]
+StressLevel = Literal["Low", "Moderate", "High", "Prefer not to say"]
+ActionCategory = Literal[
+    "movement",
+    "nutrition",
+    "smoking",
+    "alcohol",
+    "sleep",
+    "stress",
+    "preventive_care",
+]
+ActionPriority = Literal["high", "medium", "low"]
+LifestyleBasis = Literal[
+    "activity",
+    "smoking",
+    "alcohol",
+    "diet",
+    "family_history",
+    "sleep_quality",
+    "stress_level",
+]
 
 
 class InsightRequest(BaseModel):
@@ -59,6 +96,64 @@ class InsightRequest(BaseModel):
     state: State
     sex: Sex
     ethnicity: Ethnicity
+
+
+class ActionSuggestionRequest(InsightRequest):
+    activity: ActivityLevel
+    smoking: SmokingStatus
+    alcohol: AlcoholUse
+    diet: DietaryPattern
+    family_history: FamilyHistory
+    sleep_quality: SleepQuality
+    stress_level: StressLevel
+
+
+class PopulationContextItem(BaseModel):
+    cause_of_death: str
+    death_count: int = Field(ge=0)
+
+
+class GeneratedActionSuggestion(BaseModel):
+    category: ActionCategory
+    priority: ActionPriority
+    title: str = Field(min_length=4, max_length=100)
+    action: str = Field(min_length=10, max_length=280)
+    target: str = Field(min_length=3, max_length=120)
+    timeframe_weeks: int = Field(ge=1, le=12)
+    rationale: str = Field(min_length=10, max_length=360)
+    lifestyle_basis: list[LifestyleBasis] = Field(min_length=1, max_length=7)
+    population_basis: list[str] = Field(max_length=5)
+    professional_support_note: str | None
+
+
+class GeneratedActionBatch(BaseModel):
+    suggestions: list[GeneratedActionSuggestion] = Field(min_length=3, max_length=5)
+
+
+class ActionSuggestion(GeneratedActionSuggestion):
+    suggestion_id: str
+
+
+class ActionSuggestionResponse(BaseModel):
+    request_id: str
+    generation_mode: Literal["ai", "curated", "curated_fallback"]
+    fallback_reason: Literal[
+        "not_configured",
+        "provider_connection",
+        "provider_timeout",
+        "provider_rate_limited",
+        "provider_rejected_request",
+        "invalid_output",
+        "safety_rejected",
+        "unexpected_error",
+    ] | None
+    model: str | None
+    provider_processing: bool
+    comparison_group: str
+    population_context: list[PopulationContextItem]
+    suggestions: list[ActionSuggestion] = Field(min_length=3, max_length=5)
+    notice: str
+    disclaimer: str
 
 
 class ProfileResponse(BaseModel):

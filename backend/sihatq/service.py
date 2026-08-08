@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -50,7 +51,7 @@ def _percentage(value: object) -> float | None:
     return None if value is None else float(value)
 
 
-def _cause_stats(records: Iterable[MortalityRecord]) -> list[CauseStat]:
+def build_cause_stats(records: Iterable[MortalityRecord]) -> list[CauseStat]:
     ordered = sorted(records, key=lambda item: (-item.death_count, item.cause_of_death))
     return [
         CauseStat(
@@ -61,6 +62,67 @@ def _cause_stats(records: Iterable[MortalityRecord]) -> list[CauseStat]:
         )
         for index, record in enumerate(ordered, start=1)
     ]
+
+
+@dataclass(frozen=True)
+class PrimaryMortalityMatch:
+    records: tuple[MortalityRecord, ...]
+    dimension_type: str
+    comparison_state: str
+    matching_method: str
+    comparison_group: str
+
+
+def get_primary_mortality_match(
+    session: Session,
+    request: InsightRequest,
+) -> PrimaryMortalityMatch:
+    primary_records = tuple(
+        session.scalars(
+            select(MortalityRecord).where(
+                MortalityRecord.year == request.year,
+                MortalityRecord.dimension_type == "state_age_group",
+                MortalityRecord.state == request.state,
+                MortalityRecord.sex == "All",
+                MortalityRecord.age_group == request.age_group,
+            )
+        )
+    )
+    dimension_type = "state_age_group"
+    comparison_state = request.state
+    matching_method = "exact_state_age"
+    age_description = _age_group_description(request.age_group)
+    comparison_group = f"People aged {age_description} in {request.state}"
+
+    if not primary_records:
+        primary_records = tuple(
+            session.scalars(
+                select(MortalityRecord).where(
+                    MortalityRecord.year == request.year,
+                    MortalityRecord.dimension_type == "national_age_group",
+                    MortalityRecord.state == "Malaysia",
+                    MortalityRecord.sex == "All",
+                    MortalityRecord.age_group == request.age_group,
+                )
+            )
+        )
+        dimension_type = "national_age_group"
+        comparison_state = "Malaysia"
+        matching_method = "national_age_fallback"
+        comparison_group = f"People aged {age_description} in Malaysia"
+
+    if not primary_records:
+        raise LookupError(
+            f"No mortality data is available for {request.age_group} in {request.year}."
+        )
+
+    return PrimaryMortalityMatch(
+        records=primary_records,
+        dimension_type=dimension_type,
+        comparison_state=comparison_state,
+        matching_method=matching_method,
+        comparison_group=comparison_group,
+    )
 
 
 def _comparison_view(
@@ -153,46 +215,14 @@ def _all_cause_context(
 
 
 def build_insights(session: Session, request: InsightRequest) -> InsightsResponse:
-    primary_records = list(
-        session.scalars(
-            select(MortalityRecord).where(
-                MortalityRecord.year == request.year,
-                MortalityRecord.dimension_type == "state_age_group",
-                MortalityRecord.state == request.state,
-                MortalityRecord.sex == "All",
-                MortalityRecord.age_group == request.age_group,
-            )
-        )
-    )
-    dimension_type = "state_age_group"
-    comparison_state = request.state
-    matching_method = "exact_state_age"
-    age_description = _age_group_description(request.age_group)
-    comparison_group = f"People aged {age_description} in {request.state}"
+    primary_match = get_primary_mortality_match(session, request)
+    primary_records = primary_match.records
+    dimension_type = primary_match.dimension_type
+    comparison_state = primary_match.comparison_state
+    matching_method = primary_match.matching_method
+    comparison_group = primary_match.comparison_group
 
-    if not primary_records:
-        primary_records = list(
-            session.scalars(
-                select(MortalityRecord).where(
-                    MortalityRecord.year == request.year,
-                    MortalityRecord.dimension_type == "national_age_group",
-                    MortalityRecord.state == "Malaysia",
-                    MortalityRecord.sex == "All",
-                    MortalityRecord.age_group == request.age_group,
-                )
-            )
-        )
-        dimension_type = "national_age_group"
-        comparison_state = "Malaysia"
-        matching_method = "national_age_fallback"
-        comparison_group = f"People aged {age_description} in Malaysia"
-
-    if not primary_records:
-        raise LookupError(
-            f"No mortality data is available for {request.age_group} in {request.year}."
-        )
-
-    causes = _cause_stats(primary_records)
+    causes = build_cause_stats(primary_records)
     selected_cause = causes[0].cause_of_death
     selected_causes = tuple(cause.cause_of_death for cause in causes)
     source_tables = sorted({record.source_table for record in primary_records})

@@ -4,9 +4,17 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from .action_plan import build_action_suggestions
 from .config import get_settings
 from .database import get_session
-from .schemas import HealthResponse, InsightRequest, InsightsResponse, MetadataResponse
+from .schemas import (
+    ActionSuggestionRequest,
+    ActionSuggestionResponse,
+    HealthResponse,
+    InsightRequest,
+    InsightsResponse,
+    MetadataResponse,
+)
 from .service import build_insights, build_metadata
 
 
@@ -57,3 +65,13 @@ def insights(
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
+
+@app.post("/api/v1/action-suggestions", response_model=ActionSuggestionResponse)
+def action_suggestions(
+    request: ActionSuggestionRequest,
+    session: Session = Depends(get_session),
+) -> ActionSuggestionResponse:
+    try:
+        return build_action_suggestions(session, request, settings)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

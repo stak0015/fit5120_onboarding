@@ -1,6 +1,14 @@
 from dataclasses import dataclass
 from functools import lru_cache
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+# Local development settings live beside pyproject.toml. Environment variables
+# supplied by Vercel, Docker, or the shell keep priority.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 
 def _normalise_database_url(value: str) -> str:
@@ -17,6 +25,18 @@ class Settings:
     cors_origins: tuple[str, ...]
     cors_origin_regex: str | None
     environment: str
+    groq_api_key: str | None
+    groq_model: str
+    groq_safety_model: str
+    action_suggestions_enabled: bool
+    groq_timeout_seconds: float
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 @lru_cache
@@ -39,5 +59,11 @@ def get_settings() -> Settings:
         cors_origins=origins,
         cors_origin_regex=os.getenv("CORS_ORIGIN_REGEX") or None,
         environment=os.getenv("APP_ENV", "development"),
+        groq_api_key=os.getenv("GROQ_API_KEY") or None,
+        groq_model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
+        groq_safety_model=os.getenv(
+            "GROQ_SAFETY_MODEL", "openai/gpt-oss-safeguard-20b"
+        ),
+        action_suggestions_enabled=_env_bool("ACTION_SUGGESTIONS_ENABLED", True),
+        groq_timeout_seconds=float(os.getenv("GROQ_TIMEOUT_SECONDS", "15")),
     )
-
