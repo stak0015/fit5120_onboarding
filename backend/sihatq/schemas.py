@@ -3,7 +3,27 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-AgeGroup = Literal["40-44", "45-49", "50-54", "55-59", "60-64"]
+AgeGroup = Literal[
+    "0",
+    "1-4",
+    "5-9",
+    "10-14",
+    "15-19",
+    "20-24",
+    "25-29",
+    "30-34",
+    "35-39",
+    "40-44",
+    "45-49",
+    "50-54",
+    "55-59",
+    "60-64",
+    "65-69",
+    "70-74",
+    "75-79",
+    "80-84",
+    "85 dan lebih 85 and over",
+]
 State = Literal[
     "Johor",
     "Kedah",
@@ -99,6 +119,9 @@ class InsightsResponse(BaseModel):
     match: MatchResponse
     all_cause_context: AllCauseContextResponse
     comparisons: dict[Literal["age", "state", "sex"], ComparisonView]
+    comparisons_by_cause: dict[
+        str, dict[Literal["age", "state", "sex"], ComparisonView]
+    ]
     source: str
     limitations: list[str]
     disclaimer: str

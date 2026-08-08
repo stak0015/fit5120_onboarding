@@ -23,7 +23,27 @@ def test_health_and_metadata(client) -> None:
     assert metadata.status_code == 200
     payload = metadata.json()
     assert payload["years"] == [2024]
-    assert payload["age_groups"] == ["40-44", "45-49", "50-54", "55-59", "60-64"]
+    assert payload["age_groups"] == [
+        "0",
+        "1-4",
+        "5-9",
+        "10-14",
+        "15-19",
+        "20-24",
+        "25-29",
+        "30-34",
+        "35-39",
+        "40-44",
+        "45-49",
+        "50-54",
+        "55-59",
+        "60-64",
+        "65-69",
+        "70-74",
+        "75-79",
+        "80-84",
+        "85 dan lebih 85 and over",
+    ]
     assert len(payload["states"]) == 16
 
 
@@ -45,12 +65,42 @@ def test_selangor_profile_returns_expected_selected_causes(client) -> None:
     assert payload["all_cause_context"]["death_count"] == 8967
     assert payload["comparisons"]["age"]["selected_group"] == "45-49"
     assert payload["comparisons"]["state"]["scope_note"].startswith("Raw recorded counts")
+    assert list(payload["comparisons_by_cause"]) == [
+        "Ischaemic heart diseases",
+        "Pneumonia",
+        "Transport accidents",
+        "Diabetes mellitus",
+        "Kidney failure",
+    ]
+    assert payload["comparisons_by_cause"]["Pneumonia"]["age"]["cause_of_death"] == "Pneumonia"
+    assert set(payload["comparisons_by_cause"]["Kidney failure"]) == {
+        "age",
+        "state",
+        "sex",
+    }
 
 
 def test_invalid_profile_returns_422(client) -> None:
     invalid = {**PROFILE, "state": "Not a Malaysian state"}
     response = client.post("/api/v1/insights", json=invalid)
     assert response.status_code == 422
+
+
+def test_youngest_and_oldest_age_groups_are_supported(client) -> None:
+    youngest = client.post("/api/v1/insights", json={**PROFILE, "age_group": "0"})
+    assert youngest.status_code == 200
+    assert youngest.json()["match"]["comparison_group"] == (
+        "People aged under age 1 in Selangor"
+    )
+
+    oldest = client.post(
+        "/api/v1/insights",
+        json={**PROFILE, "age_group": "85 dan lebih 85 and over"},
+    )
+    assert oldest.status_code == 200
+    assert oldest.json()["match"]["comparison_group"] == (
+        "People aged 85 and over in Selangor"
+    )
 
 
 def test_local_frontend_origin_is_allowed(client) -> None:
@@ -91,7 +141,7 @@ def test_missing_state_age_uses_national_fallback(db_session) -> None:
         )
         result = build_insights(db_session, InsightRequest(**PROFILE))
         assert result.match.matching_method == "national_age_fallback"
-        assert result.match.comparison_group == "Adults aged 45-49 in Malaysia"
+        assert result.match.comparison_group == "People aged 45-49 in Malaysia"
     finally:
         transaction.rollback()
 

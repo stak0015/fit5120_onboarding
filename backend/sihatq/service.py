@@ -38,6 +38,14 @@ DISCLAIMER = (
 )
 
 
+def _age_group_description(age_group: str) -> str:
+    if age_group == "0":
+        return "under age 1"
+    if age_group == "85 dan lebih 85 and over":
+        return "85 and over"
+    return age_group
+
+
 def _percentage(value: object) -> float | None:
     return None if value is None else float(value)
 
@@ -159,7 +167,8 @@ def build_insights(session: Session, request: InsightRequest) -> InsightsRespons
     dimension_type = "state_age_group"
     comparison_state = request.state
     matching_method = "exact_state_age"
-    comparison_group = f"Adults aged {request.age_group} in {request.state}"
+    age_description = _age_group_description(request.age_group)
+    comparison_group = f"People aged {age_description} in {request.state}"
 
     if not primary_records:
         primary_records = list(
@@ -176,7 +185,7 @@ def build_insights(session: Session, request: InsightRequest) -> InsightsRespons
         dimension_type = "national_age_group"
         comparison_state = "Malaysia"
         matching_method = "national_age_fallback"
-        comparison_group = f"Adults aged {request.age_group} in Malaysia"
+        comparison_group = f"People aged {age_description} in Malaysia"
 
     if not primary_records:
         raise LookupError(
@@ -185,6 +194,7 @@ def build_insights(session: Session, request: InsightRequest) -> InsightsRespons
 
     causes = _cause_stats(primary_records)
     selected_cause = causes[0].cause_of_death
+    selected_causes = tuple(cause.cause_of_death for cause in causes)
     source_tables = sorted({record.source_table for record in primary_records})
 
     age_records = list(
@@ -195,22 +205,9 @@ def build_insights(session: Session, request: InsightRequest) -> InsightsRespons
                 MortalityRecord.state == comparison_state,
                 MortalityRecord.sex == "All",
                 MortalityRecord.age_group.in_(SUPPORTED_AGE_GROUPS),
-                MortalityRecord.cause_of_death == selected_cause,
+                MortalityRecord.cause_of_death.in_(selected_causes),
             )
         )
-    )
-    age_comparison = _comparison_view(
-        records=age_records,
-        groups=SUPPORTED_AGE_GROUPS,
-        group_attribute="age_group",
-        selected_group=request.age_group,
-        dimension_type=dimension_type,
-        cause=selected_cause,
-        percentage_basis=AGE_PERCENTAGE_BASIS,
-        scope_note=(
-            f"Recorded counts across supported age bands in {comparison_state}. "
-            "Percentages, where reported, show the age distribution within this cause."
-        ),
     )
 
     state_records = list(
@@ -221,23 +218,9 @@ def build_insights(session: Session, request: InsightRequest) -> InsightsRespons
                 MortalityRecord.state.in_(MALAYSIAN_STATES),
                 MortalityRecord.sex == "All",
                 MortalityRecord.age_group == request.age_group,
-                MortalityRecord.cause_of_death == selected_cause,
+                MortalityRecord.cause_of_death.in_(selected_causes),
             )
         )
-    )
-    state_comparison = _comparison_view(
-        records=state_records,
-        groups=MALAYSIAN_STATES,
-        group_attribute="state",
-        selected_group=request.state,
-        dimension_type="state_age_group",
-        cause=selected_cause,
-        percentage_basis=AGE_PERCENTAGE_BASIS,
-        scope_note=(
-            "Raw recorded counts for the same age band. States whose source table "
-            "did not select this cause are omitted, not treated as zero; these are "
-            "not population-adjusted rates."
-        ),
     )
 
     sex_records = list(
@@ -248,24 +231,66 @@ def build_insights(session: Session, request: InsightRequest) -> InsightsRespons
                 MortalityRecord.state == request.state,
                 MortalityRecord.sex.in_(("Male", "Female")),
                 MortalityRecord.age_group == "All ages",
-                MortalityRecord.cause_of_death == selected_cause,
+                MortalityRecord.cause_of_death.in_(selected_causes),
             )
         )
     )
-    sex_comparison = _comparison_view(
-        records=sex_records,
-        groups=("Male", "Female"),
-        group_attribute="sex",
-        selected_group=None if request.sex == "Prefer not to say" else request.sex,
-        dimension_type="state_sex",
-        cause=selected_cause,
-        percentage_basis=SEX_PERCENTAGE_BASIS,
-        scope_note=(
-            "All-ages top-ten cause data for the selected state. A missing sex row "
-            "means the cause was not reported in that sex's top ten, not zero deaths."
-        ),
-        require_groups=2,
-    )
+
+    comparisons_by_cause: dict[str, dict[str, ComparisonView]] = {}
+    for cause in selected_causes:
+        comparisons_by_cause[cause] = {
+            "age": _comparison_view(
+                records=(
+                    record for record in age_records if record.cause_of_death == cause
+                ),
+                groups=SUPPORTED_AGE_GROUPS,
+                group_attribute="age_group",
+                selected_group=request.age_group,
+                dimension_type=dimension_type,
+                cause=cause,
+                percentage_basis=AGE_PERCENTAGE_BASIS,
+                scope_note=(
+                    f"Recorded counts across supported age bands in {comparison_state}."
+                ),
+            ),
+            "state": _comparison_view(
+                records=(
+                    record for record in state_records if record.cause_of_death == cause
+                ),
+                groups=MALAYSIAN_STATES,
+                group_attribute="state",
+                selected_group=request.state,
+                dimension_type="state_age_group",
+                cause=cause,
+                percentage_basis=AGE_PERCENTAGE_BASIS,
+                scope_note=(
+                    "Raw recorded counts for the same age band. States whose source "
+                    "table did not select this cause are omitted, not treated as zero; "
+                    "these are not population-adjusted rates."
+                ),
+            ),
+            "sex": _comparison_view(
+                records=(
+                    record for record in sex_records if record.cause_of_death == cause
+                ),
+                groups=("Male", "Female"),
+                group_attribute="sex",
+                selected_group=(
+                    None if request.sex == "Prefer not to say" else request.sex
+                ),
+                dimension_type="state_sex",
+                cause=cause,
+                percentage_basis=SEX_PERCENTAGE_BASIS,
+                scope_note=(
+                    "All-ages top-ten cause data for the selected state. A missing "
+                    "sex row means the cause was not reported in that sex's top ten, "
+                    "not zero deaths."
+                ),
+                require_groups=2,
+            ),
+        }
+
+    comparisons = comparisons_by_cause[selected_cause]
 
     return InsightsResponse(
         profile=ProfileResponse(**request.model_dump()),
@@ -280,11 +305,8 @@ def build_insights(session: Session, request: InsightRequest) -> InsightsRespons
             causes=causes,
         ),
         all_cause_context=_all_cause_context(session, request),
-        comparisons={
-            "age": age_comparison,
-            "state": state_comparison,
-            "sex": sex_comparison,
-        },
+        comparisons=comparisons,
+        comparisons_by_cause=comparisons_by_cause,
         source=SOURCE_DESCRIPTION,
         limitations=[
             "Cause records include medically certified deaths only.",

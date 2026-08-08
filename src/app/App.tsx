@@ -99,6 +99,10 @@ type InsightsResponse = {
     note: string;
   };
   comparisons: Record<"age" | "state" | "sex", ComparisonView>;
+  comparisons_by_cause?: Record<
+    string,
+    Record<"age" | "state" | "sex", ComparisonView>
+  >;
   source: string;
   limitations: string[];
   disclaimer: string;
@@ -134,7 +138,12 @@ const DEFAULT_METADATA: MetadataResponse = {
     "Sarawak", "Selangor", "Terengganu", "W.P. Kuala Lumpur",
     "W.P. Labuan", "W.P. Putrajaya",
   ],
-  age_groups: ["40-44", "45-49", "50-54", "55-59", "60-64"],
+  age_groups: [
+    "0", "1-4", "5-9", "10-14", "15-19", "20-24", "25-29",
+    "30-34", "35-39", "40-44", "45-49", "50-54", "55-59",
+    "60-64", "65-69", "70-74", "75-79", "80-84",
+    "85 dan lebih 85 and over",
+  ],
   sexes: ["Male", "Female", "Prefer not to say"],
   ethnicities: ["Malay", "Chinese", "Indian", "Other Bumiputera", "Other", "Prefer not to say"],
   primary_match_dimensions: ["state", "age_group"],
@@ -144,7 +153,9 @@ const DEFAULT_METADATA: MetadataResponse = {
 const CAUSE_COLORS = ["#ef4444", "#f59e0b", "#f59e0b", "#3b82f6", "#6b8099"];
 
 function displayAgeGroup(ageGroup: string) {
-  return ageGroup === "85 dan lebih 85 and over" ? "85 and over" : ageGroup.replace(/-/g, "–");
+  if (ageGroup === "0") return "Under 1";
+  if (ageGroup === "85 dan lebih 85 and over") return "85 and over";
+  return ageGroup.replace(/-/g, "–");
 }
 
 // ── Logo ─────────────────────────────────────────────────────────────
@@ -932,6 +943,7 @@ function InsightsPage({
   onNavigate: (s: Screen) => void;
 }) {
   const [compareView, setCompareView] = useState<"age" | "state" | "sex">("age");
+  const [compareCause, setCompareCause] = useState<string | null>(null);
   const [showDataNote, setShowDataNote] = useState(false);
 
   if (!data) {
@@ -956,7 +968,13 @@ function InsightsPage({
     color: CAUSE_COLORS[index % CAUSE_COLORS.length],
   }));
   const maxCount = causes[0]?.death_count ?? 1;
-  const comparison = data.comparisons[compareView];
+  const activeCause =
+    compareCause && data.comparisons_by_cause?.[compareCause]
+      ? compareCause
+      : data.match.selected_cause;
+  const comparison =
+    data.comparisons_by_cause?.[activeCause]?.[compareView] ??
+    data.comparisons[compareView];
   const compareData = comparison.rows;
   const compareMax = Math.max(...compareData.map((row) => row.death_count), 1);
 
@@ -1106,9 +1124,6 @@ function InsightsPage({
               Live API data
             </span>
           </div>
-          <p className="mb-5 rounded-xl border border-border bg-secondary px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-            Percentages in this section show the share of each listed cause&apos;s deaths that occurred in this age band. Each cause has its own denominator, so these percentages are not personal probabilities and should not be added together.
-          </p>
           <div className="space-y-4">
             {causes.map((cause) => (
               <div key={cause.cause_of_death} className="flex items-center gap-4">
@@ -1121,20 +1136,12 @@ function InsightsPage({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-sm font-medium text-foreground truncate pr-4">{cause.cause_of_death}</span>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span
-                        className="text-xs text-muted-foreground"
-                        style={{ fontFamily: "'DM Mono', monospace" }}
-                      >
-                        {cause.death_count.toLocaleString()} deaths
-                      </span>
-                      <span
-                        className="min-w-20 text-right text-xs font-semibold"
-                        style={{ color: cause.color, fontFamily: "'DM Mono', monospace" }}
-                      >
-                        {cause.percentage === null ? "Not reported" : `${cause.percentage}%`}
-                      </span>
-                    </div>
+                    <span
+                      className="shrink-0 text-xs font-semibold"
+                      style={{ color: cause.color, fontFamily: "'DM Mono', monospace" }}
+                    >
+                      {cause.death_count.toLocaleString()} deaths
+                    </span>
                   </div>
                   <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                     <div
@@ -1155,6 +1162,33 @@ function InsightsPage({
             style={{ fontFamily: "'DM Mono', monospace" }}
           >
             COMPARISON VIEW
+          </div>
+          <div className="mb-5 max-w-md">
+            <label
+              htmlFor="comparison-cause"
+              className="mb-2 block text-[11px] text-muted-foreground"
+              style={{ fontFamily: "'DM Mono', monospace" }}
+            >
+              SELECT A CAUSE
+            </label>
+            <div className="relative">
+              <select
+                id="comparison-cause"
+                value={activeCause}
+                onChange={(event) => setCompareCause(event.target.value)}
+                className="w-full appearance-none rounded-xl border border-border bg-secondary px-4 py-3 pr-10 text-sm font-medium text-foreground transition-colors focus:border-primary/50 focus:outline-none"
+              >
+                {causes.map((cause) => (
+                  <option key={cause.cause_of_death} value={cause.cause_of_death}>
+                    {cause.cause_of_death}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={15}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+            </div>
           </div>
           <div className="flex gap-1 p-1 bg-secondary rounded-xl mb-6 w-fit">
             {(["age", "state", "sex"] as const).map((view) => (
