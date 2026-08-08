@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -34,6 +34,118 @@ type Screen =
   | "analysing"
   | "insights"
   | "action-plan";
+
+type ProfileForm = {
+  ageGroup: string;
+  sex: string;
+  ethnicity: string;
+  state: string;
+  activity: string;
+  smoking: string;
+  alcohol: string;
+  diet: string;
+  familyHistory: string;
+};
+
+type CauseStat = {
+  display_rank: number;
+  cause_of_death: string;
+  death_count: number;
+  percentage: number | null;
+};
+
+type ComparisonRow = {
+  group: string;
+  death_count: number;
+  percentage: number | null;
+};
+
+type ComparisonView = {
+  available: boolean;
+  dimension_type: string;
+  cause_of_death: string;
+  selected_group: string | null;
+  percentage_basis: string;
+  scope_note: string;
+  missing_groups: string[];
+  rows: ComparisonRow[];
+};
+
+type InsightsResponse = {
+  profile: {
+    year: number;
+    age_group: string;
+    state: string;
+    sex: string;
+    ethnicity: string;
+  };
+  data_year: number;
+  match: {
+    dimension_type: string;
+    comparison_group: string;
+    matching_method: string;
+    source_tables: string[];
+    selected_cause: string;
+    percentage_basis: string;
+    causes: CauseStat[];
+  };
+  all_cause_context: {
+    available: boolean;
+    death_count: number | null;
+    unit: string;
+    is_age_specific: boolean;
+    scope: string;
+    matching_method: string;
+    note: string;
+  };
+  comparisons: Record<"age" | "state" | "sex", ComparisonView>;
+  source: string;
+  limitations: string[];
+  disclaimer: string;
+};
+
+type MetadataResponse = {
+  years: number[];
+  states: string[];
+  age_groups: string[];
+  sexes: string[];
+  ethnicities: string[];
+  primary_match_dimensions: string[];
+  source: string;
+};
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000").replace(/\/$/, "");
+const EMPTY_PROFILE: ProfileForm = {
+  ageGroup: "",
+  sex: "",
+  ethnicity: "",
+  state: "",
+  activity: "",
+  smoking: "",
+  alcohol: "",
+  diet: "",
+  familyHistory: "",
+};
+const DEFAULT_METADATA: MetadataResponse = {
+  years: [2024],
+  states: [
+    "Johor", "Kedah", "Kelantan", "Melaka", "Negeri Sembilan",
+    "Pahang", "Perak", "Perlis", "Pulau Pinang", "Sabah",
+    "Sarawak", "Selangor", "Terengganu", "W.P. Kuala Lumpur",
+    "W.P. Labuan", "W.P. Putrajaya",
+  ],
+  age_groups: ["40-44", "45-49", "50-54", "55-59", "60-64"],
+  sexes: ["Male", "Female", "Prefer not to say"],
+  ethnicities: ["Malay", "Chinese", "Indian", "Other Bumiputera", "Other", "Prefer not to say"],
+  primary_match_dimensions: ["state", "age_group"],
+  source: "Department of Statistics Malaysia",
+};
+
+const CAUSE_COLORS = ["#ef4444", "#f59e0b", "#f59e0b", "#3b82f6", "#6b8099"];
+
+function displayAgeGroup(ageGroup: string) {
+  return ageGroup === "85 dan lebih 85 and over" ? "85 and over" : ageGroup.replace(/-/g, "–");
+}
 
 // ── Logo ─────────────────────────────────────────────────────────────
 function LangkahSihatLogo({ size = 32 }: { size?: number }) {
@@ -80,13 +192,7 @@ function Nav({
             className="text-sm font-bold text-foreground"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
-            SihatQ
-          </div>
-          <div
-            className="text-[10px] text-muted-foreground"
-            style={{ fontFamily: "'DM Mono', monospace" }}
-          >
-            LANGKAH SIHAT
+            WiseAge Health
           </div>
         </div>
       </button>
@@ -221,7 +327,7 @@ function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                 </div>
               </div>
               <span className="text-xs px-2 py-1 rounded-lg bg-secondary border border-border text-muted-foreground">
-                Example data
+                Preview
               </span>
             </div>
             <div className="space-y-3 mb-5">
@@ -259,17 +365,17 @@ function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                   className="text-xs text-muted-foreground mb-0.5"
                   style={{ fontFamily: "'DM Mono', monospace" }}
                 >
-                  TOTAL RECORDED DEATHS · 2024
+                  LIVE INSIGHTS AVAILABLE AFTER PROFILE
                 </div>
                 <div
                   className="text-2xl font-extrabold text-foreground"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
-                  1,245
+                  —
                 </div>
               </div>
               <div className="text-xs text-muted-foreground text-right max-w-[120px] leading-relaxed">
-                Source: Dept of Statistics Malaysia
+                Select your profile to load current DOSM values
               </div>
             </div>
           </div>
@@ -343,7 +449,7 @@ function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                 Population context, not personal predictions
               </h2>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                SihatQ draws on the Department of Statistics Malaysia&apos;s cause-of-death data to show you what the health landscape looks like for people in your demographic group. You get context — not a verdict.
+                WiseAge Health draws on the Department of Statistics Malaysia&apos;s cause-of-death data to show you what the health landscape looks like for people in your demographic group. You get context — not a verdict.
               </p>
               <div className="space-y-3">
                 {[
@@ -429,42 +535,23 @@ function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
         </div>
       </section>
 
-      <footer className="border-t border-border py-8 px-6 text-center text-xs text-muted-foreground">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <LangkahSihatLogo size={20} />
-          <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-            SihatQ by Langkah Sihat
-          </span>
-        </div>
-        <p>
-          © 2025 Langkah Sihat · Kuala Lumpur, Malaysia · Educational tool only. Not a medical device.
-        </p>
-      </footer>
     </div>
   );
 }
 
 // ── Personal Health Profile ────────────────────────────────────────────
-function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+function ProfilePage({
+  initialProfile,
+  metadata,
+  onGenerate,
+}: {
+  initialProfile: ProfileForm;
+  metadata: MetadataResponse;
+  onGenerate: (profile: ProfileForm) => void;
+}) {
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState({
-    ageGroup: "",
-    sex: "",
-    ethnicity: "",
-    state: "",
-    activity: "",
-    smoking: "",
-    alcohol: "",
-    diet: "",
-    familyHistory: "",
-  });
-
-  const malaysianStates = [
-    "Johor", "Kedah", "Kelantan", "Melaka", "Negeri Sembilan",
-    "Pahang", "Perak", "Perlis", "Pulau Pinang", "Sabah",
-    "Sarawak", "Selangor", "Terengganu",
-    "W.P. Kuala Lumpur", "W.P. Labuan", "W.P. Putrajaya",
-  ];
+  const [form, setForm] = useState<ProfileForm>(initialProfile);
+  const [validationMessage, setValidationMessage] = useState("");
 
   const steps = [
     {
@@ -475,25 +562,25 @@ function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
           key: "ageGroup",
           label: "Age Group",
           type: "select",
-          options: ["40–44", "45–49", "50–54", "55–59", "60–64"],
+          options: metadata.age_groups,
         },
         {
           key: "sex",
           label: "Sex",
           type: "select",
-          options: ["Male", "Female", "Prefer not to say"],
+          options: metadata.sexes,
         },
         {
           key: "ethnicity",
           label: "Ethnicity",
           type: "select",
-          options: ["Malay", "Chinese", "Indian", "Other Bumiputera", "Other", "Prefer not to say"],
+          options: metadata.ethnicities,
         },
         {
           key: "state",
           label: "State of Residence",
           type: "select",
-          options: malaysianStates,
+          options: metadata.states,
         },
       ],
     },
@@ -540,11 +627,19 @@ function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
 
   function update(key: string, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
+    setValidationMessage("");
   }
 
   function handleNext() {
+    const missingFields = currentStep.fields
+      .filter((field) => !form[field.key as keyof ProfileForm])
+      .map((field) => field.label);
+    if (missingFields.length > 0) {
+      setValidationMessage(`Please select: ${missingFields.join(", ")}.`);
+      return;
+    }
     if (step < steps.length - 1) setStep(step + 1);
-    else onNavigate("analysing");
+    else onGenerate(form);
   }
 
   return (
@@ -618,7 +713,7 @@ function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                   </option>
                   {field.options.map((o) => (
                     <option key={o} value={o} className="bg-card">
-                      {o}
+                      {field.key === "ageGroup" ? displayAgeGroup(o) : o}
                     </option>
                   ))}
                 </select>
@@ -630,6 +725,12 @@ function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             </div>
           ))}
         </div>
+
+        {validationMessage && (
+          <div className="mt-4 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-xs text-red-200">
+            {validationMessage}
+          </div>
+        )}
 
         <div className="flex gap-3 mt-8">
           {step > 0 && (
@@ -671,9 +772,17 @@ function ProfilePage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
 }
 
 // ── Analysing Profile ─────────────────────────────────────────────────
-function AnalysingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
-  const [progress, setProgress] = useState(0);
-  const [currentTask, setCurrentTask] = useState(0);
+function AnalysingPage({
+  error,
+  onRetry,
+  onNavigate,
+}: {
+  error: string;
+  onRetry: () => void;
+  onNavigate: (s: Screen) => void;
+}) {
+  const progress = error ? 100 : 62;
+  const currentTask = error ? 5 : 2;
 
   const tasks = [
     { label: "Reading demographic profile", icon: Users },
@@ -683,25 +792,6 @@ function AnalysingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
     { label: "Calculating population statistics", icon: Brain },
     { label: "Preparing preventive recommendations", icon: Target },
   ];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 100) {
-          clearInterval(interval);
-          setTimeout(() => onNavigate("insights"), 600);
-          return 100;
-        }
-        return p + 1;
-      });
-    }, 50);
-    return () => clearInterval(interval);
-  }, [onNavigate]);
-
-  useEffect(() => {
-    const taskIndex = Math.floor((progress / 100) * tasks.length);
-    setCurrentTask(Math.min(taskIndex, tasks.length - 1));
-  }, [progress, tasks.length]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-6">
@@ -725,11 +815,10 @@ function AnalysingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
           className="text-2xl font-bold text-foreground mb-2"
           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
         >
-          Matching your profile with Malaysian mortality data…
+          {error ? "We could not load your mortality insights" : "Matching your profile with Malaysian mortality data…"}
         </h2>
         <p className="text-sm text-muted-foreground mb-10">
-          We are finding the closest population comparison group from the
-          Department of Statistics Malaysia dataset.
+          {error || "We are querying the Department of Statistics Malaysia dataset and preparing the supported comparison views."}
         </p>
 
         {/* Progress bar */}
@@ -810,49 +899,66 @@ function AnalysingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             );
           })}
         </div>
+
+        {error ? (
+          <div className="mt-8 flex gap-3">
+            <button
+              onClick={onRetry}
+              className="flex-1 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => onNavigate("profile")}
+              className="flex-1 rounded-xl border border-border px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              Edit profile
+            </button>
+          </div>
+        ) : (
+          <p className="mt-6 text-xs text-muted-foreground">Waiting for the API response…</p>
+        )}
       </div>
     </div>
   );
 }
 
 // ── Health Insights ───────────────────────────────────────────────────
-function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+function InsightsPage({
+  data,
+  onNavigate,
+}: {
+  data: InsightsResponse | null;
+  onNavigate: (s: Screen) => void;
+}) {
   const [compareView, setCompareView] = useState<"age" | "state" | "sex">("age");
   const [showDataNote, setShowDataNote] = useState(false);
 
-  const causes = [
-    { rank: 1, name: "Ischaemic heart diseases", count: 312, pct: 25.1, color: "#ef4444" },
-    { rank: 2, name: "Pneumonia", count: 198, pct: 15.9, color: "#f59e0b" },
-    { rank: 3, name: "Diabetes mellitus", count: 174, pct: 14.0, color: "#f59e0b" },
-    { rank: 4, name: "Kidney failure", count: 143, pct: 11.5, color: "#3b82f6" },
-    { rank: 5, name: "Transport accidents", count: 97, pct: 7.8, color: "#6b8099" },
-  ];
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-background px-6 pt-36 text-center">
+        <h1 className="text-2xl font-bold text-foreground">Create a profile to view insights</h1>
+        <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
+          Submit a profile first so the API can load the supported Malaysian population comparison group.
+        </p>
+        <button
+          onClick={() => onNavigate("profile")}
+          className="mt-6 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground"
+        >
+          Create profile
+        </button>
+      </div>
+    );
+  }
 
-  const maxCount = causes[0].count;
-
-  const ageCompare = [
-    { group: "40–44", deaths: 820 },
-    { group: "45–49", deaths: 1245 },
-    { group: "50–54", deaths: 1890 },
-    { group: "55–59", deaths: 2640 },
-    { group: "60–64", deaths: 3810 },
-  ];
-
-  const stateCompare = [
-    { group: "Selangor", deaths: 1245 },
-    { group: "Johor", deaths: 980 },
-    { group: "Perak", deaths: 870 },
-    { group: "Pulau Pinang", deaths: 640 },
-    { group: "Sabah", deaths: 590 },
-  ];
-
-  const sexCompare = [
-    { group: "Male", deaths: 1245 },
-    { group: "Female", deaths: 892 },
-  ];
-
-  const compareData = compareView === "age" ? ageCompare : compareView === "state" ? stateCompare : sexCompare;
-  const compareMax = Math.max(...compareData.map((d) => d.deaths));
+  const causes = data.match.causes.map((cause, index) => ({
+    ...cause,
+    color: CAUSE_COLORS[index % CAUSE_COLORS.length],
+  }));
+  const maxCount = causes[0]?.death_count ?? 1;
+  const comparison = data.comparisons[compareView];
+  const compareData = comparison.rows;
+  const compareMax = Math.max(...compareData.map((row) => row.death_count), 1);
 
   return (
     <div
@@ -880,7 +986,7 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
               Your health insights
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Population-level mortality patterns · Example data
+              Population-level mortality patterns · {data.data_year}
             </p>
           </div>
           <button
@@ -903,17 +1009,17 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             className="text-xl font-bold text-foreground mb-2"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
-            Malaysian adults aged 45–49 in Selangor
+            {data.match.comparison_group}
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            These results describe patterns in the selected population group. They are not a prediction of your personal health outcome. Some profile combinations may use the closest available dataset category.
+            {data.disclaimer} {data.match.matching_method === "national_age_fallback" && "This result uses the Malaysia-wide age category because the selected state/age category was unavailable."}
           </p>
           <div className="flex flex-wrap gap-3 mt-4">
             {[
-              { label: "Age Group", value: "45–49" },
-              { label: "State", value: "Selangor" },
-              { label: "Sex", value: "Male" },
-              { label: "Ethnicity", value: "Malay" },
+              { label: "Age Group", value: displayAgeGroup(data.profile.age_group) },
+              { label: "State", value: data.profile.state },
+              { label: "Sex", value: data.profile.sex },
+              { label: "Ethnicity", value: data.profile.ethnicity },
             ].map((item) => (
               <div key={item.label} className="px-3 py-1.5 rounded-lg bg-secondary border border-border">
                 <span className="text-xs text-muted-foreground">{item.label}: </span>
@@ -931,7 +1037,7 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                 className="text-xs text-muted-foreground"
                 style={{ fontFamily: "'DM Mono', monospace" }}
               >
-                TOTAL RECORDED DEATHS
+                ALL-CAUSE CONTEXT
               </div>
               <button
                 onClick={() => setShowDataNote(!showDataNote)}
@@ -944,14 +1050,18 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
               className="text-5xl font-extrabold text-foreground mb-1"
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             >
-              1,245
+              {data.all_cause_context.available && data.all_cause_context.death_count !== null
+                ? data.all_cause_context.death_count.toLocaleString()
+                : "—"}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              For this selected population category in 2024
+              {data.all_cause_context.available
+                ? `${data.all_cause_context.scope} · ${data.data_year} · not age-specific`
+                : "Unavailable for this profile"}
             </p>
             {showDataNote && (
               <div className="mt-3 p-3 rounded-lg bg-secondary border border-border text-xs text-muted-foreground leading-relaxed">
-                This is a population-level count for the selected demographic group. It represents all recorded deaths in that category, not a personal risk figure.
+                {data.all_cause_context.note} It is not an age-specific count and is not a personal risk figure.
               </div>
             )}
           </div>
@@ -963,16 +1073,12 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
             >
               LEADING CAUSES
             </div>
-            <p className="text-xs text-muted-foreground mb-4 opacity-60">Example data — illustrative values only</p>
+            <p className="text-xs text-muted-foreground mb-4 opacity-60">Live values from the selected DOSM comparison group</p>
             <div className="flex flex-wrap gap-3">
-              {[
-                { icon: Heart, label: "Heart disease", color: "text-red-400" },
-                { icon: Wind, label: "Pneumonia", color: "text-blue-400" },
-                { icon: Activity, label: "Diabetes", color: "text-yellow-400" },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-secondary">
-                  <item.icon size={13} className={item.color} />
-                  <span className="text-xs text-foreground font-medium">{item.label}</span>
+              {causes.slice(0, 3).map((item) => (
+                <div key={item.cause_of_death} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-secondary">
+                  <Activity size={13} style={{ color: item.color }} />
+                  <span className="text-xs text-foreground font-medium">{item.cause_of_death}</span>
                 </div>
               ))}
             </div>
@@ -993,44 +1099,47 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                 className="text-lg font-semibold text-foreground"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
-                Top 5 causes for this group
+                Selected causes for this group
               </h2>
             </div>
             <span className="text-xs text-muted-foreground px-2 py-1 rounded-lg bg-secondary border border-border">
-              Example data
+              Live API data
             </span>
           </div>
+          <p className="mb-5 rounded-xl border border-border bg-secondary px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+            Percentages in this section show the share of each listed cause&apos;s deaths that occurred in this age band. Each cause has its own denominator, so these percentages are not personal probabilities and should not be added together.
+          </p>
           <div className="space-y-4">
             {causes.map((cause) => (
-              <div key={cause.rank} className="flex items-center gap-4">
+              <div key={cause.cause_of_death} className="flex items-center gap-4">
                 <div
                   className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
                   style={{ background: `${cause.color}18`, color: cause.color, fontFamily: "'DM Mono', monospace" }}
                 >
-                  {cause.rank}
+                  {cause.display_rank}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm font-medium text-foreground truncate pr-4">{cause.name}</span>
+                    <span className="text-sm font-medium text-foreground truncate pr-4">{cause.cause_of_death}</span>
                     <div className="flex items-center gap-3 shrink-0">
                       <span
                         className="text-xs text-muted-foreground"
                         style={{ fontFamily: "'DM Mono', monospace" }}
                       >
-                        {cause.count.toLocaleString()} deaths
+                        {cause.death_count.toLocaleString()} deaths
                       </span>
                       <span
-                        className="text-xs font-semibold w-10 text-right"
+                        className="min-w-20 text-right text-xs font-semibold"
                         style={{ color: cause.color, fontFamily: "'DM Mono', monospace" }}
                       >
-                        {cause.pct}%
+                        {cause.percentage === null ? "Not reported" : `${cause.percentage}%`}
                       </span>
                     </div>
                   </div>
                   <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-700"
-                      style={{ width: `${(cause.count / maxCount) * 100}%`, background: cause.color }}
+                      style={{ width: `${(cause.death_count / maxCount) * 100}%`, background: cause.color }}
                     />
                   </div>
                 </div>
@@ -1062,26 +1171,30 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
               </button>
             ))}
           </div>
-          {compareView !== "age" && (
-            <p className="text-xs text-muted-foreground mb-4 italic">
-              Note: State and sex comparisons use a different source category from DOSM.
-            </p>
+          <p className="text-xs text-muted-foreground mb-4 italic">
+            {comparison.scope_note} Cause: {comparison.cause_of_death}.
+          </p>
+          {!comparison.available && (
+            <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
+              A complete comparison is unavailable. Missing groups: {comparison.missing_groups.length > 0 ? comparison.missing_groups.join(", ") : "not reported by the source"}. Missing records have not been treated as zero.
+            </div>
           )}
-          <div className="space-y-3">
-            {compareData.map((row) => (
+          {compareData.length > 0 ? (
+            <div className="space-y-3">
+              {compareData.map((row) => (
               <div key={row.group} className="flex items-center gap-4">
                 <div
                   className="text-xs text-muted-foreground w-20 shrink-0 text-right"
                   style={{ fontFamily: "'DM Mono', monospace" }}
                 >
-                  {row.group}
+                  {compareView === "age" ? displayAgeGroup(row.group) : row.group}
                 </div>
                 <div className="flex-1 h-6 bg-secondary rounded-lg overflow-hidden relative">
                   <div
                     className="h-full rounded-lg transition-all duration-700 flex items-center justify-end pr-2"
                     style={{
-                      width: `${(row.deaths / compareMax) * 100}%`,
-                      background: row.group === "45–49" || row.group === "Selangor" || row.group === "Male"
+                      width: `${(row.death_count / compareMax) * 100}%`,
+                      background: row.group === comparison.selected_group
                         ? "#00d4aa"
                         : "rgba(0,212,170,0.25)",
                     }}
@@ -1089,20 +1202,27 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                     <span
                       className="text-xs font-semibold"
                       style={{
-                        color: row.group === "45–49" || row.group === "Selangor" || row.group === "Male"
+                        color: row.group === comparison.selected_group
                           ? "#080d12"
                           : "#00d4aa",
                         fontFamily: "'DM Mono', monospace",
                       }}
                     >
-                      {row.deaths.toLocaleString()}
+                      {row.death_count.toLocaleString()}
                     </span>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground mt-4 opacity-60">Total recorded deaths · Example data · 2024</p>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-secondary px-4 py-6 text-center text-xs text-muted-foreground">
+              This comparison is not reported for the selected cause and profile.
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground mt-4 opacity-60">
+            Recorded deaths for {comparison.cause_of_death} · {data.data_year}
+          </p>
         </div>
 
         {/* Data source panel */}
@@ -1117,12 +1237,13 @@ function InsightsPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                 DATA SOURCE
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed mb-2">
-                Department of Statistics Malaysia, Statistics on Causes of Death, 2024.
-                Last available dataset year: 2024.
+                {data.source} Last available dataset year: {data.data_year}.
               </p>
-              <button className="text-xs text-primary hover:underline font-medium">
-                View data limitations →
-              </button>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                {data.limitations.map((limitation) => (
+                  <p key={limitation}>• {limitation}</p>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -1258,7 +1379,7 @@ function ActionPlanPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
               className="text-3xl font-bold text-foreground"
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             >
-              Your Langkah Sihat Plan
+              Your Personalised Action Plan
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               4 health pillars · {totalTasks} weekly actions · Tailored to your
@@ -1437,7 +1558,7 @@ function ActionPlanPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
               Schedule Your 4-Week Check-In
             </div>
             <p className="text-xs text-muted-foreground">
-              SihatQ will re-analyse your profile in 28 days and update your
+              WiseAge Health will re-analyse your profile in 28 days and update your
               plan based on your progress. Expect a 5–12 point score improvement
               if you complete 80%+ of actions.
             </p>
@@ -1454,10 +1575,70 @@ function ActionPlanPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
 // ── Root App ──────────────────────────────────────────────────────────
 export default function App() {
   const [screen, setScreen] = useState<Screen>("landing");
+  const [profile, setProfile] = useState<ProfileForm>(EMPTY_PROFILE);
+  const [insights, setInsights] = useState<InsightsResponse | null>(null);
+  const [insightsError, setInsightsError] = useState("");
+  const [metadata, setMetadata] = useState<MetadataResponse>(DEFAULT_METADATA);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMetadata() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/metadata`);
+        if (!response.ok) return;
+        const payload = await response.json() as MetadataResponse;
+        if (!cancelled && payload.states.length > 0 && payload.age_groups.length > 0) {
+          setMetadata(payload);
+        }
+      } catch {
+        // The built-in supported values keep the profile usable while the API is offline.
+      }
+    }
+
+    loadMetadata();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function navigate(s: Screen) {
     setScreen(s);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function generateInsights(nextProfile: ProfileForm) {
+    setProfile(nextProfile);
+    setInsights(null);
+    setInsightsError("");
+    setScreen("analysing");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/insights`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          year: metadata.years[0] ?? 2024,
+          age_group: nextProfile.ageGroup,
+          state: nextProfile.state,
+          sex: nextProfile.sex,
+          ethnicity: nextProfile.ethnicity,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        const detail = Array.isArray(payload?.detail)
+          ? payload.detail.map((item: { msg?: string }) => item.msg).join(" ")
+          : payload?.detail;
+        throw new Error(detail || `The insights service returned HTTP ${response.status}.`);
+      }
+      setInsights(payload as InsightsResponse);
+      setScreen("insights");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error) {
+      setInsightsError(error instanceof Error ? error.message : "Unable to load insights.");
+    }
   }
 
   return (
@@ -1468,9 +1649,17 @@ export default function App() {
       `}</style>
       <Nav onNavigate={navigate} current={screen} />
       {screen === "landing" && <LandingPage onNavigate={navigate} />}
-      {screen === "profile" && <ProfilePage onNavigate={navigate} />}
-      {screen === "analysing" && <AnalysingPage onNavigate={navigate} />}
-      {screen === "insights" && <InsightsPage onNavigate={navigate} />}
+      {screen === "profile" && (
+        <ProfilePage initialProfile={profile} metadata={metadata} onGenerate={generateInsights} />
+      )}
+      {screen === "analysing" && (
+        <AnalysingPage
+          error={insightsError}
+          onRetry={() => generateInsights(profile)}
+          onNavigate={navigate}
+        />
+      )}
+      {screen === "insights" && <InsightsPage data={insights} onNavigate={navigate} />}
       {screen === "action-plan" && <ActionPlanPage onNavigate={navigate} />}
     </div>
   );

@@ -5,9 +5,15 @@ node_modules/
 dist/
 
 # Local environment variables and secrets
+.venv
 .env
 .env.*
 !.env.example
+.pytest_cache/
+.vercel/
+**/__pycache__/
+*.pyc
+.coverage
 
 # Logs
 *.log
