@@ -3,6 +3,8 @@
 
 WiseAge Health is a Vite/React application backed by a stateless FastAPI service and PostgreSQL. It presents population-level Malaysian mortality context; it does not calculate personal risk or provide a diagnosis.
 
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the complete system architecture, data flows, matching logic, persistence model, AI safety pipeline, and deployment topology.
+
 The profile and optional action-plan feature keep their device-local data in browser storage. FastAPI may request schema-constrained suggestions from Groq for adult profiles when configured, but submitted profiles and action plans are not persisted by the backend or PostgreSQL. Profiles below age 20 always receive reviewed curated suggestions without an external AI request.
 
 ## Run locally

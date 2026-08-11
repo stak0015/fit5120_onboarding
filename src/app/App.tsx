@@ -525,8 +525,8 @@ function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
                 },
                 {
                   icon: Users,
-                  title: "Built for Malaysians aged 40–60",
-                  desc: "Designed around the demographic groups most represented in preventive-health decisions.",
+                  title: "Coverage across all age groups",
+                  desc: "Supports every age band available in the dataset, from under age 1 to 85 and over.",
                 },
                 {
                   icon: Heart,
