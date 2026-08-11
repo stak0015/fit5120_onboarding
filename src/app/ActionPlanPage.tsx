@@ -798,11 +798,8 @@ export function ActionPlanPage({
               <Plus size={14} /> CREATE YOUR OWN GOAL
             </div>
             <h2 className="text-lg font-semibold">
-              {editingGoalId ? "Edit goal" : "Add a goal without AI"}
+              {editingGoalId ? "Edit goal" : "Add a goal"}
             </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Custom goal text stays on this device and is never sent to Groq.
-            </p>
           </div>
 
           <form onSubmit={submitGoal} className="grid gap-4 md:grid-cols-2">
