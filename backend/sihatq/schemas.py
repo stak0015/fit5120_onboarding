@@ -78,7 +78,6 @@ ActionCategory = Literal[
     "stress",
     "preventive_care",
 ]
-ActionPriority = Literal["high", "medium", "low"]
 LifestyleBasis = Literal[
     "activity",
     "smoking",
@@ -115,7 +114,6 @@ class PopulationContextItem(BaseModel):
 
 class GeneratedActionSuggestion(BaseModel):
     category: ActionCategory
-    priority: ActionPriority
     title: str = Field(min_length=4, max_length=100)
     action: str = Field(min_length=10, max_length=280)
     target: str = Field(min_length=3, max_length=120)

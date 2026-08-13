@@ -18,6 +18,7 @@ import {
   Target,
   ChevronDown,
   Info,
+  AlertTriangle,
 } from "lucide-react";
 
 type Screen =
@@ -295,7 +296,7 @@ function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
     {
       icon: Target,
       title: "Receive practical recommendations",
-      desc: "Get straightforward, evidence-based actions you can start this week — no diagnosis, no alarm.",
+      desc: "Get straightforward, evidence-based actions you can start this week.",
     },
   ];
 
@@ -336,7 +337,7 @@ function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
               <span className="text-primary">Take proactive steps.</span>
             </h1>
             <p className="text-lg text-muted-foreground leading-relaxed mb-8 max-w-md">
-              Explore Malaysian mortality statistics based on your demographic profile and receive practical health actions — no diagnosis, no scaremongering.
+              Explore Malaysian mortality statistics based on your demographic profile and receive practical health actions.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <button
@@ -850,7 +851,7 @@ function ProfilePage({
           <Shield size={14} className="text-primary mt-0.5 shrink-0" />
           <p className="text-xs text-muted-foreground">
             {step === 0
-              ? "Your submitted profile is saved only in this browser so it is available after a refresh. The API and PostgreSQL do not store it."
+              ? "Your submitted profile is saved only in this browser and is not shared with any server. You can clear it at any time."
               : "This tool provides population-level information and does not diagnose or predict individual health outcomes. Consult a healthcare professional for personal advice."}
           </p>
         </div>
@@ -1118,9 +1119,12 @@ function InsightsPage({
           >
             {data.match.comparison_group}
           </div>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            {data.disclaimer} {data.match.matching_method === "national_age_fallback" && "This result uses the Malaysia-wide age category because the selected state/age category was unavailable."}
-          </p>
+          {data.match.matching_method === "national_age_fallback" && (
+            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+              This result uses the Malaysia-wide age category because the selected
+              state and age category was unavailable.
+            </p>
+          )}
           <div className="flex flex-wrap gap-3 mt-4">
             {[
               { label: "Age Group", value: displayAgeGroup(data.profile.age_group) },
@@ -1133,6 +1137,21 @@ function InsightsPage({
                 <span className="text-xs font-medium text-foreground">{item.value}</span>
               </div>
             ))}
+          </div>
+          <div
+            className="mt-4 flex items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-400/10 p-4"
+            role="note"
+            aria-label="Important health disclaimer"
+          >
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-300" />
+            <div>
+              <p className="text-sm font-semibold text-amber-100">
+                Important: this is population data, not personal medical advice
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-amber-100/80">
+                {data.disclaimer}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -1359,13 +1378,29 @@ function InsightsPage({
               >
                 DATA SOURCE
               </div>
-              <p className="text-xs text-muted-foreground leading-relaxed mb-2">
-                {data.source} Last available dataset year: {data.data_year}.
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {data.source} The results on this page use {data.data_year} recorded
+                death data.
               </p>
-              <div className="space-y-1 text-xs text-muted-foreground">
-                {data.limitations.map((limitation) => (
-                  <p key={limitation}>• {limitation}</p>
-                ))}
+              <div className="mt-3">
+                <p className="mb-1.5 text-xs font-medium text-foreground">
+                  What to know when reading these figures
+                </p>
+                <ul className="space-y-1.5 pl-4 text-xs leading-relaxed text-muted-foreground">
+                  <li className="list-disc">
+                    Cause figures cover medically certified deaths and selected causes;
+                    they are not a complete list of every death recorded.
+                  </li>
+                  <li className="list-disc">
+                    Comparisons show raw death counts, not rates adjusted for differences
+                    in population size or age distribution.
+                  </li>
+                  <li className="list-disc">
+                    Age, state, and sex come from separate source tables. The all-cause
+                    figure also comes from a separate, non-age-specific dataset, so it
+                    should not be compared directly with the cause counts.
+                  </li>
+                </ul>
               </div>
             </div>
           </div>
