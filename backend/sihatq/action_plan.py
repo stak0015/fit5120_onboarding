@@ -78,10 +78,6 @@ GROQ_RESPONSE_SCHEMA = {
                 "additionalProperties": False,
                 "properties": {
                     "category": {"type": "string", "enum": ALLOWED_CATEGORIES},
-                    "priority": {
-                        "type": "string",
-                        "enum": ["high", "medium", "low"],
-                    },
                     "title": {"type": "string"},
                     "action": {"type": "string"},
                     "target": {"type": "string"},
@@ -104,7 +100,6 @@ GROQ_RESPONSE_SCHEMA = {
                 },
                 "required": [
                     "category",
-                    "priority",
                     "title",
                     "action",
                     "target",
@@ -125,6 +120,7 @@ The supplied mortality causes are recorded counts for a population comparison gr
 They are not the user's diagnoses, probabilities, or measured personal risks.
 
 Return 3 to 5 practical, low-burden suggestions using the required JSON schema.
+Treat every suggestion as optional and do not rank or assign priority to them.
 Personalise primarily from the supplied living-habit answers. Population causes may
 only provide educational context. Never claim that the user has, will develop, or is
 personally at risk of a disease. Never diagnose, prescribe treatment, recommend
@@ -241,7 +237,6 @@ class GroqSuggestionGateway:
 def _suggestion(
     *,
     category: str,
-    priority: str,
     title: str,
     action: str,
     target: str,
@@ -252,7 +247,6 @@ def _suggestion(
 ) -> GeneratedActionSuggestion:
     return GeneratedActionSuggestion(
         category=category,
-        priority=priority,
         title=title,
         action=action,
         target=target,
@@ -275,7 +269,6 @@ def _curated_suggestions(
         suggestions.append(
             _suggestion(
                 category="smoking",
-                priority="high",
                 title="Ask for smoking-cessation support",
                 action=(
                     "Speak with a trusted adult and qualified healthcare professional "
@@ -295,7 +288,6 @@ def _curated_suggestions(
         suggestions.append(
             _suggestion(
                 category="alcohol",
-                priority="high",
                 title="Discuss alcohol use with someone qualified",
                 action=(
                     "Talk with a trusted adult or qualified healthcare professional about alcohol use and appropriate support."
@@ -314,7 +306,6 @@ def _curated_suggestions(
         suggestions.append(
             _suggestion(
                 category="movement",
-                priority="medium",
                 title="Build a manageable movement routine",
                 action=(
                     "Choose an enjoyable, age-appropriate activity with a parent or caregiver and do it on three days each week."
@@ -332,7 +323,6 @@ def _curated_suggestions(
         suggestions.append(
             _suggestion(
                 category="sleep",
-                priority="medium",
                 title="Create a steadier sleep routine",
                 action="Choose a consistent wind-down time and reduce stimulating screen use before bed on most nights.",
                 target="Follow the routine on 5 nights each week",
@@ -346,7 +336,6 @@ def _curated_suggestions(
         suggestions.append(
             _suggestion(
                 category="stress",
-                priority="medium",
                 title="Schedule a short daily reset",
                 action=(
                     "Choose ten quiet minutes for breathing, stretching, or talking with a trusted adult."
@@ -369,7 +358,6 @@ def _curated_suggestions(
         suggestions.append(
             _suggestion(
                 category="nutrition",
-                priority="medium",
                 title="Improve one regular meal",
                 action="Choose one regular meal and add a fruit or vegetable while reducing one highly processed item.",
                 target="Improve one meal on 5 days each week",
@@ -382,7 +370,6 @@ def _curated_suggestions(
     defaults = [
         _suggestion(
             category="preventive_care",
-            priority="low",
             title="Prepare for a preventive-health conversation",
             action=(
                 "Write down one health question to discuss with a parent, caregiver, or qualified healthcare professional."
@@ -396,7 +383,6 @@ def _curated_suggestions(
         ),
         _suggestion(
             category="movement",
-            priority="low",
             title="Break up long periods of sitting",
             action="Stand, stretch, or walk briefly during two natural breaks in the day.",
             target="Take 2 movement breaks each day",
@@ -406,7 +392,6 @@ def _curated_suggestions(
         ),
         _suggestion(
             category="stress",
-            priority="low",
             title="Protect one restorative activity",
             action="Set aside time each week for an enjoyable offline activity with supportive people.",
             target="Complete 1 restorative activity each week",
@@ -423,8 +408,6 @@ def _curated_suggestions(
             suggestions.append(item)
             existing_titles.add(item.title.casefold())
 
-    priority_order = {"high": 0, "medium": 1, "low": 2}
-    suggestions.sort(key=lambda item: priority_order[item.priority])
     return GeneratedActionBatch(suggestions=suggestions[:5])
 
 

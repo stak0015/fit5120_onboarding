@@ -40,7 +40,6 @@ type PopulationContextItem = {
 type ActionSuggestion = {
   suggestion_id: string;
   category: string;
-  priority: "high" | "medium" | "low";
   title: string;
   action: string;
   target: string;
@@ -126,12 +125,24 @@ const STATUS_LABELS: Record<GoalStatus, string> = {
   in_progress: "In progress",
   completed: "Completed",
 };
-const PRIORITY_STYLES = {
-  high: "border-red-400/30 bg-red-400/10 text-red-300",
-  medium: "border-amber-400/30 bg-amber-400/10 text-amber-300",
-  low: "border-primary/30 bg-primary/10 text-primary",
+const STATUS_STYLES: Record<GoalStatus, string> = {
+  not_started: "border-slate-400/30 bg-slate-400/10 text-slate-300",
+  in_progress: "border-sky-400/30 bg-sky-400/10 text-sky-300",
+  completed: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
 };
-
+const STATUS_DOT_STYLES: Record<GoalStatus, string> = {
+  not_started: "bg-slate-400",
+  in_progress: "bg-sky-400",
+  completed: "bg-emerald-400",
+};
+const STATUS_OPTION_STYLES: Record<
+  GoalStatus,
+  { backgroundColor: string; color: string }
+> = {
+  not_started: { backgroundColor: "#1e293b", color: "#e2e8f0" },
+  in_progress: { backgroundColor: "#0c4a6e", color: "#e0f2fe" },
+  completed: { backgroundColor: "#064e3b", color: "#d1fae5" },
+};
 function loadStore(): ActionPlanStore {
   if (typeof window === "undefined") return EMPTY_STORE;
   try {
@@ -223,6 +234,7 @@ export function ActionPlanPage({
   const [goalForm, setGoalForm] = useState<GoalForm>(EMPTY_GOAL_FORM);
   const [goalFormError, setGoalFormError] = useState("");
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [addMode, setAddMode] = useState<"suggestions" | "custom">("suggestions");
 
   const ready = profileIsReady(profile);
   const under20 = profileIsUnder20(profile.ageGroup);
@@ -234,7 +246,14 @@ export function ActionPlanPage({
   const visibleSuggestions =
     activeCache?.response.suggestions.filter(
       (suggestion) =>
-        !activeCache.dismissedSuggestionIds.includes(suggestion.suggestion_id)
+        !activeCache.dismissedSuggestionIds.includes(suggestion.suggestion_id) &&
+        !store.goals.some(
+          (goal) =>
+            goal.sourceSuggestionId === suggestion.suggestion_id ||
+            (goal.source === "ai" &&
+              goal.title.trim().toLocaleLowerCase() ===
+                suggestion.title.trim().toLocaleLowerCase())
+        )
     ) ?? [];
   const completedGoals = store.goals.filter((goal) => goal.status === "completed").length;
 
@@ -357,7 +376,21 @@ export function ActionPlanPage({
       sourceModel: activeCache.response.model,
       generationMode: activeCache.response.generation_mode,
     };
-    updateStore((current) => ({ ...current, goals: [goal, ...current.goals] }));
+    updateStore((current) => ({
+      ...current,
+      goals: [goal, ...current.goals],
+      suggestionCache: current.suggestionCache
+        ? {
+            ...current.suggestionCache,
+            dismissedSuggestionIds: [
+              ...new Set([
+                ...current.suggestionCache.dismissedSuggestionIds,
+                suggestion.suggestion_id,
+              ]),
+            ],
+          }
+        : null,
+    }));
   }
 
   function dismissSuggestion(suggestionId: string) {
@@ -422,6 +455,7 @@ export function ActionPlanPage({
   }
 
   function editGoal(goal: StoredGoal) {
+    setAddMode("custom");
     setEditingGoalId(goal.id);
     setGoalForm({
       title: goal.title,
@@ -430,7 +464,9 @@ export function ActionPlanPage({
       notes: goal.notes,
     });
     setGoalFormError("");
-    document.getElementById("goal-form")?.scrollIntoView({ behavior: "smooth" });
+    window.requestAnimationFrame(() => {
+      document.getElementById("goal-form")?.scrollIntoView({ behavior: "smooth" });
+    });
   }
 
   function deleteGoal(goalId: string) {
@@ -498,6 +534,166 @@ export function ActionPlanPage({
         )}
 
         <section className="mb-6 rounded-2xl border border-border bg-card p-6">
+          <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+            <div>
+              <div className="mb-1 flex items-center gap-2 text-xs text-primary">
+                <Target size={14} /> MY ACTION PLAN
+              </div>
+              <h2 className="text-lg font-semibold">Goals saved on this device</h2>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {completedGoals} of {store.goals.length} completed
+            </div>
+          </div>
+
+          {store.goals.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border bg-secondary/40 px-4 py-8 text-center">
+              <Target size={22} className="mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm font-medium">No goals added yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Add a suggestion or create your own goal below.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {store.goals.map((goal) => {
+                const fromPreviousProfile = Boolean(
+                  currentFingerprint &&
+                    goal.source === "ai" &&
+                    goal.sourceProfileFingerprint &&
+                    goal.sourceProfileFingerprint !== currentFingerprint
+                );
+                return (
+                  <article key={goal.id} className="rounded-xl border border-border bg-secondary/50 p-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[10px] uppercase text-muted-foreground">
+                            {goal.source === "ai" ? "Suggested" : "My goal"}
+                          </span>
+                          {fromPreviousProfile && (
+                            <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-300">
+                              From a previous profile
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-sm font-semibold">{goal.title}</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Target: {goal.target} · {goal.timeframe}
+                        </p>
+                        {goal.notes && (
+                          <p className="mt-3 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
+                            {goal.notes}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center gap-2">
+                        <div className="relative">
+                          <span
+                            aria-hidden="true"
+                            className={`pointer-events-none absolute left-3 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full ${STATUS_DOT_STYLES[goal.status]}`}
+                          />
+                          <select
+                            aria-label={`Status for ${goal.title}`}
+                            value={goal.status}
+                            onChange={(event) =>
+                              updateGoalStatus(goal.id, event.target.value as GoalStatus)
+                            }
+                            style={{ colorScheme: "dark" }}
+                            className={`appearance-none rounded-lg border py-2 pl-7 pr-8 text-xs font-medium transition-colors focus:border-primary/50 focus:outline-none ${STATUS_STYLES[goal.status]}`}
+                          >
+                            {(Object.keys(STATUS_LABELS) as GoalStatus[]).map((status) => (
+                              <option
+                                key={status}
+                                value={status}
+                                style={STATUS_OPTION_STYLES[status]}
+                              >
+                                {STATUS_LABELS[status]}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown
+                            size={12}
+                            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          aria-label={`Edit ${goal.title}`}
+                          onClick={() => editGoal(goal)}
+                          className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Delete ${goal.title}`}
+                          onClick={() => deleteGoal(goal.id)}
+                          className="rounded-lg border border-border p-2 text-muted-foreground hover:border-red-400/30 hover:text-red-300"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <div className="flex flex-col">
+          <div className="rounded-t-2xl border border-b-0 border-border bg-card px-6 pt-6">
+            <div className="mb-1 text-xs text-primary">ADD TO YOUR PLAN</div>
+            <h2 className="text-lg font-semibold">Choose how to add a goal</h2>
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+              Start from an optional suggestion or write a goal that suits you.
+            </p>
+            <div
+              className="mt-5 grid grid-cols-2 gap-1 rounded-xl bg-secondary p-1"
+              role="tablist"
+              aria-label="Ways to add a goal"
+            >
+              <button
+                id="suggestions-tab"
+                type="button"
+                role="tab"
+                aria-controls="suggestions-panel"
+                aria-selected={addMode === "suggestions"}
+                onClick={() => setAddMode("suggestions")}
+                className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+                  addMode === "suggestions"
+                    ? "bg-card text-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Sparkles size={14} /> Suggested actions
+              </button>
+              <button
+                id="custom-goal-tab"
+                type="button"
+                role="tab"
+                aria-controls="goal-form"
+                aria-selected={addMode === "custom"}
+                onClick={() => setAddMode("custom")}
+                className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+                  addMode === "custom"
+                    ? "bg-card text-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Plus size={14} /> {editingGoalId ? "Edit goal" : "Create my own"}
+              </button>
+            </div>
+          </div>
+
+          {addMode === "suggestions" && (
+          <section
+            id="suggestions-panel"
+            role="tabpanel"
+            aria-labelledby="suggestions-tab"
+            className="mb-6 rounded-b-2xl border border-t-0 border-border bg-card p-6"
+          >
           <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
             <div>
               <div className="mb-1 flex items-center gap-2 text-xs text-primary">
@@ -612,11 +808,6 @@ export function ActionPlanPage({
                       className="rounded-2xl border border-border bg-secondary/50 p-5"
                     >
                       <div className="mb-3 flex flex-wrap items-center gap-2">
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase ${PRIORITY_STYLES[suggestion.priority]}`}
-                        >
-                          {suggestion.priority} priority
-                        </span>
                         <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[10px] uppercase text-muted-foreground">
                           {suggestion.category.replace(/_/g, " ")}
                         </span>
@@ -690,109 +881,16 @@ export function ActionPlanPage({
               </p>
             </>
           )}
-        </section>
-
-        <section className="mb-6 rounded-2xl border border-border bg-card p-6">
-          <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-            <div>
-              <div className="mb-1 flex items-center gap-2 text-xs text-primary">
-                <Target size={14} /> MY ACTION PLAN
-              </div>
-              <h2 className="text-lg font-semibold">Goals saved on this device</h2>
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {completedGoals} of {store.goals.length} completed
-            </div>
-          </div>
-
-          {store.goals.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border bg-secondary/40 px-4 py-8 text-center">
-              <Target size={22} className="mx-auto mb-2 text-muted-foreground" />
-              <p className="text-sm font-medium">No goals added yet</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Add a suggestion above or create your own goal below.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {store.goals.map((goal) => {
-                const fromPreviousProfile = Boolean(
-                  currentFingerprint &&
-                    goal.source === "ai" &&
-                    goal.sourceProfileFingerprint &&
-                    goal.sourceProfileFingerprint !== currentFingerprint
-                );
-                return (
-                  <article key={goal.id} className="rounded-xl border border-border bg-secondary/50 p-4">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[10px] uppercase text-muted-foreground">
-                            {goal.source === "ai" ? "Suggested" : "My goal"}
-                          </span>
-                          {fromPreviousProfile && (
-                            <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-300">
-                              From a previous profile
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-sm font-semibold">{goal.title}</h3>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Target: {goal.target} · {goal.timeframe}
-                        </p>
-                        {goal.notes && (
-                          <p className="mt-3 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
-                            {goal.notes}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 flex-wrap items-center gap-2">
-                        <div className="relative">
-                          <select
-                            aria-label={`Status for ${goal.title}`}
-                            value={goal.status}
-                            onChange={(event) =>
-                              updateGoalStatus(goal.id, event.target.value as GoalStatus)
-                            }
-                            className="appearance-none rounded-lg border border-border bg-card py-2 pl-3 pr-8 text-xs text-foreground focus:border-primary/50 focus:outline-none"
-                          >
-                            {(Object.keys(STATUS_LABELS) as GoalStatus[]).map((status) => (
-                              <option key={status} value={status}>
-                                {STATUS_LABELS[status]}
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown
-                            size={12}
-                            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          aria-label={`Edit ${goal.title}`}
-                          onClick={() => editGoal(goal)}
-                          className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Delete ${goal.title}`}
-                          onClick={() => deleteGoal(goal.id)}
-                          className="rounded-lg border border-border p-2 text-muted-foreground hover:border-red-400/30 hover:text-red-300"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+          </section>
           )}
-        </section>
 
-        <section id="goal-form" className="rounded-2xl border border-border bg-card p-6">
+          {addMode === "custom" && (
+          <section
+            id="goal-form"
+            role="tabpanel"
+            aria-labelledby="custom-goal-tab"
+            className="mb-6 rounded-b-2xl border border-t-0 border-border bg-card p-6"
+          >
           <div className="mb-5">
             <div className="mb-1 flex items-center gap-2 text-xs text-primary">
               <Plus size={14} /> CREATE YOUR OWN GOAL
@@ -904,7 +1002,9 @@ export function ActionPlanPage({
               )}
             </div>
           </form>
-        </section>
+          </section>
+          )}
+        </div>
 
         <div className="mt-6 flex flex-col items-start justify-between gap-3 rounded-2xl border border-border bg-secondary p-5 sm:flex-row sm:items-center">
           <div className="flex items-start gap-3">

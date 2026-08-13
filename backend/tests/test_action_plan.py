@@ -1,6 +1,11 @@
 from sqlalchemy import func, select
 
-from sihatq.action_plan import _fallback_details, build_action_suggestions
+from sihatq.action_plan import (
+    GROQ_RESPONSE_SCHEMA,
+    SYSTEM_PROMPT,
+    _fallback_details,
+    build_action_suggestions,
+)
 from sihatq.config import Settings
 from sihatq.models import AllCauseContext, MortalityRecord
 from sihatq.schemas import (
@@ -49,7 +54,6 @@ def generated_batch(*, unsafe: bool = False) -> GeneratedActionBatch:
     suggestions = [
         GeneratedActionSuggestion(
             category="movement",
-            priority="high" if index == 0 else "medium",
             title=f"Build a walking routine {index + 1}",
             action=action_text if index == 0 else f"Schedule a short walk on day {index + 1} of each week.",
             target=f"Complete {index + 1} planned movement sessions",
@@ -93,6 +97,14 @@ class FakeGateway:
         return self.safe
 
 
+def test_provider_contract_does_not_rank_suggestions() -> None:
+    item_schema = GROQ_RESPONSE_SCHEMA["properties"]["suggestions"]["items"]
+
+    assert "priority" not in item_schema["properties"]
+    assert "priority" not in item_schema["required"]
+    assert "do not rank or assign priority" in SYSTEM_PROMPT
+
+
 def test_provider_connection_failure_has_an_actionable_reason() -> None:
     api_connection_error = type("APIConnectionError", (Exception,), {})
     reason, notice = _fallback_details(api_connection_error("connection failed"))
@@ -115,6 +127,7 @@ def test_adult_profile_uses_validated_ai_suggestions(db_session) -> None:
     assert result.provider_processing is True
     assert result.model == "openai/gpt-oss-120b"
     assert len(result.suggestions) == 3
+    assert "priority" not in result.suggestions[0].model_dump()
     assert result.suggestions[0].population_basis == ["Ischaemic heart diseases"]
     assert gateway.generate_calls == 1
     assert gateway.safety_calls == 1
