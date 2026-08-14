@@ -722,6 +722,23 @@ export function ActionPlanPage({
             </button>
           </div>
 
+          <div
+            className="mb-5 flex items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-400/10 p-4"
+            role="note"
+            aria-label="Important suggested-actions disclaimer"
+          >
+            <AlertTriangle size={17} className="mt-0.5 shrink-0 text-amber-300" />
+            <div>
+              <p className="text-sm font-semibold text-amber-100">
+                Important: these suggestions are general wellness information
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-amber-100/80">
+                {activeCache?.response.disclaimer ??
+                  "They are not a diagnosis, treatment plan, or personal risk assessment. Consult a qualified healthcare professional for advice about your circumstances."}
+              </p>
+            </div>
+          </div>
+
           {!ready && (
             <div className="rounded-xl border border-border bg-secondary px-4 py-4 text-sm text-muted-foreground">
               Create a profile to generate suggestions. You can still create and manage
@@ -876,9 +893,6 @@ export function ActionPlanPage({
                 </div>
               )}
 
-              <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground opacity-70">
-                {activeCache.response.disclaimer}
-              </p>
             </>
           )}
           </section>
